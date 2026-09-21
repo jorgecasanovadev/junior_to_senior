@@ -50,3 +50,6 @@ app.*.map.json
 
 # Salidas de cobertura
 /coverage/
+
+# Borradores de contenido en curso; solo se versiona el validador
+/scratchpad/content/*.json

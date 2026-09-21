@@ -22,7 +22,7 @@ Además, cada pregunta incluye una **rúbrica por nivel**: cómo suena la respue
 | Tecnologías con contenido | Flutter, Dart, JavaScript, TypeScript |
 | Preguntas | 200 (50 por tecnología) |
 | Ejercicios | 40 |
-| Etapas de ruta | 16, con 98 hitos |
+| Etapas de ruta | 16, con 96 hitos |
 | Plataformas | Android · iOS · Web |
 
 En camino: React, Vue, Python y Django.
