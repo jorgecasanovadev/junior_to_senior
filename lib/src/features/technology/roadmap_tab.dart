@@ -70,214 +70,224 @@ class _StageCard extends ConsumerWidget {
         ? 0.0
         : done / stage.milestones.length;
 
-    return IntrinsicHeight(
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Timeline rail.
-          Column(
-            children: [
-              Container(
-                width: 28,
-                height: 28,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: progress == 1
-                      ? accent
-                      : accent.withValues(alpha: 0.15),
-                  border: Border.all(color: accent, width: 2),
-                ),
-                alignment: Alignment.center,
-                child: progress == 1
-                    ? const Icon(Icons.check, size: 16, color: Colors.white)
-                    : Text(
-                        '${stage.level.index + 1}',
-                        style: TextStyle(
-                          color: accent,
-                          fontWeight: FontWeight.w800,
-                          fontSize: 13,
-                        ),
-                      ),
-              ),
-              if (!isLast)
-                Expanded(
-                  child: Container(
-                    width: 2,
-                    color: theme.colorScheme.outlineVariant,
-                  ),
-                ),
-            ],
+    // The timeline rail is a Positioned line inside a Stack rather than an
+    // Expanded inside an IntrinsicHeight.
+    //
+    // IntrinsicHeight asks the row for its intrinsic height, but an expanded
+    // ExpansionTile lays out taller than it reports, so the tile ended up in
+    // a box too short for it and painted the overflow stripes. A Stack sizes
+    // itself to the Row and lets the line stretch to the card's real height,
+    // which also skips the extra (and expensive) intrinsic layout pass.
+    return Stack(
+      children: [
+        if (!isLast)
+          Positioned(
+            // 13 plus half of the 2px line centres it under the 28px dot.
+            left: 13,
+            top: 28,
+            bottom: 0,
+            child: Container(width: 2, color: theme.colorScheme.outlineVariant),
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Padding(
-              padding: EdgeInsets.only(bottom: isLast ? 0 : 20),
-              child: Card(
-                child: ExpansionTile(
-                  shape: const Border(),
-                  collapsedShape: const Border(),
-                  initiallyExpanded: progress < 1,
-                  tilePadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 4,
-                  ),
-                  childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                  title: Text(
-                    stage.title,
-                    style: theme.textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  subtitle: Padding(
-                    padding: const EdgeInsets.only(top: 6),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            LevelChip(stage.level, dense: true),
-                            const SizedBox(width: 8),
-                            Text(
-                              formatWeeks(stage.estimatedWeeks),
-                              style: theme.textTheme.labelSmall?.copyWith(
-                                color: theme.colorScheme.onSurfaceVariant,
-                              ),
-                            ),
-                            const Spacer(),
-                            Text(
-                              '$done/${stage.milestones.length}',
-                              style: theme.textTheme.labelSmall?.copyWith(
-                                color: theme.colorScheme.onSurfaceVariant,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(3),
-                          child: LinearProgressIndicator(
-                            value: progress,
-                            minHeight: 4,
-                            color: accent,
-                            backgroundColor:
-                                theme.colorScheme.surfaceContainerHighest,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  children: [
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        stage.goal,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          height: 1.5,
-                        ),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 28,
+              height: 28,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: progress == 1 ? accent : accent.withValues(alpha: 0.15),
+                border: Border.all(color: accent, width: 2),
+              ),
+              alignment: Alignment.center,
+              child: progress == 1
+                  ? const Icon(Icons.check, size: 16, color: Colors.white)
+                  : Text(
+                      '${stage.level.index + 1}',
+                      style: TextStyle(
+                        color: accent,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 13,
                       ),
                     ),
-                    const SizedBox(height: 14),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Wrap(
-                        spacing: 6,
-                        runSpacing: 6,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Padding(
+                padding: EdgeInsets.only(bottom: isLast ? 0 : 20),
+                child: Card(
+                  child: ExpansionTile(
+                    shape: const Border(),
+                    collapsedShape: const Border(),
+                    initiallyExpanded: progress < 1,
+                    tilePadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 4,
+                    ),
+                    childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                    title: Text(
+                      stage.title,
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    subtitle: Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          for (final skill in stage.skills)
-                            Chip(
-                              label: Text(skill),
-                              visualDensity: VisualDensity.compact,
-                              materialTapTargetSize:
-                                  MaterialTapTargetSize.shrinkWrap,
+                          Row(
+                            children: [
+                              LevelChip(stage.level, dense: true),
+                              const SizedBox(width: 8),
+                              // Expanded, not Spacer: on a 320px screen
+                              // the duration label must be able to shrink.
+                              Expanded(
+                                child: Text(
+                                  formatWeeks(stage.estimatedWeeks),
+                                  overflow: TextOverflow.ellipsis,
+                                  style: theme.textTheme.labelSmall?.copyWith(
+                                    color: theme.colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                '$done/${stage.milestones.length}',
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(3),
+                            child: LinearProgressIndicator(
+                              value: progress,
+                              minHeight: 4,
+                              color: accent,
+                              backgroundColor:
+                                  theme.colorScheme.surfaceContainerHighest,
                             ),
+                          ),
                         ],
                       ),
                     ),
-                    const SizedBox(height: 8),
-                    for (final milestone in stage.milestones)
-                      CheckboxListTile(
-                        value: completed.contains(milestone.id),
-                        dense: true,
-                        contentPadding: EdgeInsets.zero,
-                        controlAffinity: ListTileControlAffinity.leading,
-                        title: Text(
-                          milestone.title,
+                    children: [
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          stage.goal,
                           style: theme.textTheme.bodyMedium?.copyWith(
-                            fontWeight: FontWeight.w600,
+                            height: 1.5,
                           ),
                         ),
-                        subtitle: Text(milestone.detail),
-                        onChanged: (checked) => ref
-                            .read(progressRepositoryProvider)
-                            .toggleMilestone(
-                              milestoneId: milestone.id,
-                              technologyId: technologyId,
-                              stageId: stage.id,
-                              completed: checked ?? false,
-                              now: DateTime.now(),
-                            ),
                       ),
-                    if (stage.readinessSignals.isNotEmpty) ...[
-                      const SizedBox(height: 12),
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: accent.withValues(alpha: 0.08),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                      const SizedBox(height: 14),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Wrap(
+                          spacing: 6,
+                          runSpacing: 6,
                           children: [
-                            Text(
-                              'Sabes que has superado esta etapa cuando…',
-                              style: theme.textTheme.labelLarge?.copyWith(
-                                color: accent,
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            for (final signal in stage.readinessSignals)
-                              Padding(
-                                padding: const EdgeInsets.only(bottom: 4),
-                                child: Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    const Text('✓  '),
-                                    Expanded(child: Text(signal)),
-                                  ],
-                                ),
+                            for (final skill in stage.skills)
+                              Chip(
+                                label: Text(skill),
+                                visualDensity: VisualDensity.compact,
+                                materialTapTargetSize:
+                                    MaterialTapTargetSize.shrinkWrap,
                               ),
                           ],
                         ),
                       ),
-                    ],
-                    if (stage.resources.isNotEmpty) ...[
-                      const SizedBox(height: 12),
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          'Recursos',
-                          style: theme.textTheme.labelLarge,
-                        ),
-                      ),
-                      for (final resource in stage.resources)
-                        ListTile(
+                      const SizedBox(height: 8),
+                      for (final milestone in stage.milestones)
+                        CheckboxListTile(
+                          value: completed.contains(milestone.id),
                           dense: true,
                           contentPadding: EdgeInsets.zero,
-                          leading: Icon(_iconFor(resource.kind), size: 18),
-                          title: Text(resource.title),
-                          subtitle: Text(resource.kind.label),
-                          trailing: const Icon(Icons.open_in_new, size: 16),
-                          onTap: () => _openResource(context, resource.url),
+                          controlAffinity: ListTileControlAffinity.leading,
+                          title: Text(
+                            milestone.title,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          subtitle: Text(milestone.detail),
+                          onChanged: (checked) => ref
+                              .read(progressRepositoryProvider)
+                              .toggleMilestone(
+                                milestoneId: milestone.id,
+                                technologyId: technologyId,
+                                stageId: stage.id,
+                                completed: checked ?? false,
+                                now: DateTime.now(),
+                              ),
                         ),
+                      if (stage.readinessSignals.isNotEmpty) ...[
+                        const SizedBox(height: 12),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: accent.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Sabes que has superado esta etapa cuando…',
+                                style: theme.textTheme.labelLarge?.copyWith(
+                                  color: accent,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              for (final signal in stage.readinessSignals)
+                                Padding(
+                                  padding: const EdgeInsets.only(bottom: 4),
+                                  child: Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      const Text('✓  '),
+                                      Expanded(child: Text(signal)),
+                                    ],
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ],
+                      if (stage.resources.isNotEmpty) ...[
+                        const SizedBox(height: 12),
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            'Recursos',
+                            style: theme.textTheme.labelLarge,
+                          ),
+                        ),
+                        for (final resource in stage.resources)
+                          ListTile(
+                            dense: true,
+                            contentPadding: EdgeInsets.zero,
+                            leading: Icon(_iconFor(resource.kind), size: 18),
+                            title: Text(resource.title),
+                            subtitle: Text(resource.kind.label),
+                            trailing: const Icon(Icons.open_in_new, size: 16),
+                            onTap: () => _openResource(context, resource.url),
+                          ),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
               ),
             ),
-          ),
-        ],
-      ),
+          ],
+        ),
+      ],
     );
   }
 

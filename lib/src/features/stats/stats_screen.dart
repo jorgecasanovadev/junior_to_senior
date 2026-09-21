@@ -34,8 +34,10 @@ class StatsScreen extends ConsumerWidget {
               Card(
                 child: Padding(
                   padding: const EdgeInsets.all(20),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  child: Wrap(
+                    alignment: WrapAlignment.spaceBetween,
+                    spacing: 16,
+                    runSpacing: 12,
                     children: [
                       StatPill(
                         label: 'racha',

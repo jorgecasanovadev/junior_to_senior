@@ -85,8 +85,12 @@ class _Loaded extends ConsumerWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      // Wrap, not Row: four labels like "en aprendizaje"
+                      // do not fit side by side on a narrow phone.
+                      Wrap(
+                        alignment: WrapAlignment.spaceBetween,
+                        spacing: 16,
+                        runSpacing: 12,
                         children: [
                           StatPill(
                             label: 'vistas',

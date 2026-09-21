@@ -99,8 +99,10 @@ class _SetupView extends ConsumerWidget {
           Card(
             child: Padding(
               padding: const EdgeInsets.all(16),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
+              child: Wrap(
+                alignment: WrapAlignment.spaceBetween,
+                spacing: 16,
+                runSpacing: 12,
                 children: [
                   StatPill(label: 'repasos', value: '${plan.dueCount}'),
                   StatPill(label: 'nuevas', value: '${plan.newCount}'),
@@ -501,8 +503,10 @@ class _SummaryView extends ConsumerWidget {
         Card(
           child: Padding(
             padding: const EdgeInsets.all(20),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
+            child: Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              spacing: 16,
+              runSpacing: 12,
               children: [
                 StatPill(label: 'respondidas', value: '${state.answered}'),
                 StatPill(
