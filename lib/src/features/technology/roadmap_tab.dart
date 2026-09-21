@@ -33,12 +33,20 @@ class RoadmapTab extends ConsumerWidget {
             title: 'Ruta de estudio pendiente',
           );
         }
+        // Only the stage the user is actually on opens by default. Opening
+        // every incomplete stage means four cards of ~2000px and no overview;
+        // opening none gives no hint that there is anything inside.
+        final currentStage = value.roadmap.indexWhere(
+          (stage) => stage.milestones.any((m) => !completed.contains(m.id)),
+        );
+
         return ListView.builder(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
           itemCount: value.roadmap.length,
           itemBuilder: (context, index) => _StageCard(
             stage: value.roadmap[index],
             number: index + 1,
+            startsExpanded: index == currentStage,
             technologyId: technologyId,
             completed: completed,
             isLast: index == value.roadmap.length - 1,
@@ -53,6 +61,7 @@ class _StageCard extends ConsumerWidget {
   const _StageCard({
     required this.stage,
     required this.number,
+    required this.startsExpanded,
     required this.technologyId,
     required this.completed,
     required this.isLast,
@@ -72,6 +81,9 @@ class _StageCard extends ConsumerWidget {
   /// seniority level: several stages share a level, which made the markers
   /// read 1, 1, 2, 3 instead of 1, 2, 3, 4.
   final int number;
+
+  /// Whether this is the stage the user is currently working through.
+  final bool startsExpanded;
   final String technologyId;
   final Set<String> completed;
   final bool isLast;
@@ -135,7 +147,10 @@ class _StageCard extends ConsumerWidget {
                   child: ExpansionTile(
                     shape: const Border(),
                     collapsedShape: const Border(),
-                    initiallyExpanded: progress < 1,
+                    // PageStorageKey so that opening or closing a card
+                    // survives the ListView recycling it while scrolling.
+                    key: PageStorageKey(stage.id),
+                    initiallyExpanded: startsExpanded,
                     tilePadding: const EdgeInsets.symmetric(
                       horizontal: 16,
                       vertical: 4,

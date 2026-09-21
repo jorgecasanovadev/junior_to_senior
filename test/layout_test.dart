@@ -112,6 +112,37 @@ void main() {
       );
     });
 
+    testWidgets('solo se abre la etapa en curso', (tester) async {
+      await pumpAt(
+        tester,
+        const Size(393, 852),
+        const RoadmapTab(technologyId: 'flutter'),
+        inspect: (tester) async {
+          // La lista solo construye lo visible, y la tarjeta abierta mide
+          // ~2000 px, así que se comprueba cada etapa por su key.
+          bool abierta(String stageId) => tester
+              .widget<ExpansionTile>(find.byKey(PageStorageKey(stageId)))
+              .initiallyExpanded;
+
+          // Sin progreso, la etapa en curso es la primera.
+          expect(abierta('flutter-s1'), isTrue);
+
+          for (final stageId in ['flutter-s2', 'flutter-s3', 'flutter-s4']) {
+            await tester.scrollUntilVisible(
+              find.byKey(PageStorageKey(stageId)),
+              300,
+              scrollable: find.byType(Scrollable).first,
+            );
+            expect(
+              abierta(stageId),
+              isFalse,
+              reason: '$stageId no debería abrirse sola',
+            );
+          }
+        },
+      );
+    });
+
     testWidgets('el marcador se alinea con la primera línea del título', (
       tester,
     ) async {
