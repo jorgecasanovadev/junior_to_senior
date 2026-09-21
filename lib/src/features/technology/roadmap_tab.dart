@@ -1,0 +1,306 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
+
+import '../../core/formatters.dart';
+import '../../core/theme.dart';
+import '../../domain/models.dart';
+import '../../providers.dart';
+import '../widgets/common.dart';
+
+/// The study roadmap, rendered as a vertical timeline of stages. Milestones
+/// are checkable and persisted, which is what turns a static article into a
+/// plan the user is actually walking.
+class RoadmapTab extends ConsumerWidget {
+  const RoadmapTab({required this.technologyId, super.key});
+
+  final String technologyId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final content = ref.watch(technologyContentProvider(technologyId));
+    final completed =
+        ref.watch(completedMilestonesProvider(technologyId)).value ??
+        const <String>{};
+
+    return content.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (error, _) => ErrorView(error),
+      data: (value) {
+        if (value.roadmap.isEmpty) {
+          return const EmptyState(
+            icon: Icons.map_outlined,
+            title: 'Ruta de estudio pendiente',
+          );
+        }
+        return ListView.builder(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
+          itemCount: value.roadmap.length,
+          itemBuilder: (context, index) => _StageCard(
+            stage: value.roadmap[index],
+            technologyId: technologyId,
+            completed: completed,
+            isLast: index == value.roadmap.length - 1,
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _StageCard extends ConsumerWidget {
+  const _StageCard({
+    required this.stage,
+    required this.technologyId,
+    required this.completed,
+    required this.isLast,
+  });
+
+  final RoadmapStage stage;
+  final String technologyId;
+  final Set<String> completed;
+  final bool isLast;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final accent = theme.colorScheme.levelColor(stage.level.index);
+    final done = stage.milestones.where((m) => completed.contains(m.id)).length;
+    final progress = stage.milestones.isEmpty
+        ? 0.0
+        : done / stage.milestones.length;
+
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Timeline rail.
+          Column(
+            children: [
+              Container(
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: progress == 1
+                      ? accent
+                      : accent.withValues(alpha: 0.15),
+                  border: Border.all(color: accent, width: 2),
+                ),
+                alignment: Alignment.center,
+                child: progress == 1
+                    ? const Icon(Icons.check, size: 16, color: Colors.white)
+                    : Text(
+                        '${stage.level.index + 1}',
+                        style: TextStyle(
+                          color: accent,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 13,
+                        ),
+                      ),
+              ),
+              if (!isLast)
+                Expanded(
+                  child: Container(
+                    width: 2,
+                    color: theme.colorScheme.outlineVariant,
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Padding(
+              padding: EdgeInsets.only(bottom: isLast ? 0 : 20),
+              child: Card(
+                child: ExpansionTile(
+                  shape: const Border(),
+                  collapsedShape: const Border(),
+                  initiallyExpanded: progress < 1,
+                  tilePadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 4,
+                  ),
+                  childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                  title: Text(
+                    stage.title,
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  subtitle: Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            LevelChip(stage.level, dense: true),
+                            const SizedBox(width: 8),
+                            Text(
+                              formatWeeks(stage.estimatedWeeks),
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                            const Spacer(),
+                            Text(
+                              '$done/${stage.milestones.length}',
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(3),
+                          child: LinearProgressIndicator(
+                            value: progress,
+                            minHeight: 4,
+                            color: accent,
+                            backgroundColor:
+                                theme.colorScheme.surfaceContainerHighest,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  children: [
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        stage.goal,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          height: 1.5,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
+                        children: [
+                          for (final skill in stage.skills)
+                            Chip(
+                              label: Text(skill),
+                              visualDensity: VisualDensity.compact,
+                              materialTapTargetSize:
+                                  MaterialTapTargetSize.shrinkWrap,
+                            ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    for (final milestone in stage.milestones)
+                      CheckboxListTile(
+                        value: completed.contains(milestone.id),
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        controlAffinity: ListTileControlAffinity.leading,
+                        title: Text(
+                          milestone.title,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        subtitle: Text(milestone.detail),
+                        onChanged: (checked) => ref
+                            .read(progressRepositoryProvider)
+                            .toggleMilestone(
+                              milestoneId: milestone.id,
+                              technologyId: technologyId,
+                              stageId: stage.id,
+                              completed: checked ?? false,
+                              now: DateTime.now(),
+                            ),
+                      ),
+                    if (stage.readinessSignals.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: accent.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Sabes que has superado esta etapa cuando…',
+                              style: theme.textTheme.labelLarge?.copyWith(
+                                color: accent,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            for (final signal in stage.readinessSignals)
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 4),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text('✓  '),
+                                    Expanded(child: Text(signal)),
+                                  ],
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
+                    if (stage.resources.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          'Recursos',
+                          style: theme.textTheme.labelLarge,
+                        ),
+                      ),
+                      for (final resource in stage.resources)
+                        ListTile(
+                          dense: true,
+                          contentPadding: EdgeInsets.zero,
+                          leading: Icon(_iconFor(resource.kind), size: 18),
+                          title: Text(resource.title),
+                          subtitle: Text(resource.kind.label),
+                          trailing: const Icon(Icons.open_in_new, size: 16),
+                          onTap: () => _openResource(context, resource.url),
+                        ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static IconData _iconFor(ResourceKind kind) => switch (kind) {
+    ResourceKind.docs => Icons.menu_book_outlined,
+    ResourceKind.article => Icons.article_outlined,
+    ResourceKind.video => Icons.play_circle_outline,
+    ResourceKind.book => Icons.book_outlined,
+    ResourceKind.course => Icons.school_outlined,
+    ResourceKind.repo => Icons.code,
+  };
+
+  /// Resources are external links. The app itself never needs the network,
+  /// but opening a reference in the browser obviously does.
+  Future<void> _openResource(BuildContext context, String url) async {
+    final uri = Uri.parse(url);
+    final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (opened || !context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('No se pudo abrir el enlace: $url'),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+}

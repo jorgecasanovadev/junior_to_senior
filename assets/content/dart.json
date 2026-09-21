@@ -1,0 +1,1516 @@
+{
+  "schemaVersion": 1,
+  "technologyId": "dart",
+  "name": "Dart",
+  "questions": [
+    {
+      "id": "dart-q001",
+      "level": "junior",
+      "topic": "Tipos",
+      "tags": [
+        "tipos",
+        "fundamentos"
+      ],
+      "prompt": "¿Qué diferencia hay entre var, final, const y late?",
+      "answer": "- `var`: inferencia de tipo, variable reasignable. El tipo se fija en la declaración y no cambia.\n- `final`: se asigna **una vez**, en tiempo de ejecución. El valor puede calcularse (`final now = DateTime.now()`), pero después no se reasigna.\n- `const`: constante en **tiempo de compilación**. El valor debe conocerse al compilar y el objeto se canoniza: dos `const` iguales son la misma instancia.\n- `late`: promete al compilador que asignarás la variable antes de usarla. Sirve para dos cosas: romper una dependencia circular en la inicialización y conseguir inicialización perezosa (`late final x = costoso()` no ejecuta `costoso()` hasta el primer acceso).\n\nMatiz importante: `final` congela la **referencia**, no el contenido. Una `final List` se puede seguir mutando; una `const List` no.",
+      "rubric": {
+        "junior": "Distingue var reasignable, final de una sola asignación y const de tiempo de compilación.",
+        "mid": "Añade late con sus dos usos, y sabe que final no hace inmutable el objeto apuntado.",
+        "senior": "Explica la canonización de const y sus efectos en identidad y memoria, advierte de que un `late` sin asignar lanza LateInitializationError en runtime (cambias un error de compilación por uno de ejecución), y menciona la inicialización perezosa como herramienta de arranque."
+      },
+      "followUps": [
+        "¿Una final List se puede modificar?",
+        "¿Qué riesgo tiene late?"
+      ]
+    },
+    {
+      "id": "dart-q002",
+      "level": "junior",
+      "topic": "Null safety",
+      "tags": [
+        "null safety"
+      ],
+      "prompt": "¿Qué es sound null safety y qué significa que sea \"sound\"?",
+      "answer": "En Dart, los tipos **no admiten null por defecto**: `String` nunca es null, y si quieres permitirlo escribes `String?`. El compilador impide usar un valor nullable sin comprobarlo antes.\n\nLo de **sound** (sólido) es la parte importante: la garantía es total, no aproximada. Si una variable tiene tipo `String`, el compilador puede **confiar** en que jamás será null en tiempo de ejecución. Eso no es solo seguridad: permite al compilador AOT **eliminar las comprobaciones de null** en el código generado, lo que produce binarios más pequeños y rápidos.\n\nA cambio, la migración fue estricta: no se puede mezclar código con y sin null safety en el mismo programa sin perder la garantía.\n\nHerramientas: `?` (nullable), `!` (asegura no nulo, lanza si te equivocas), `??` (valor por defecto), `?.` (acceso condicional), `??=` (asignar si es nulo).",
+      "rubric": {
+        "junior": "Sabe que hay tipos nullable y no nullable y usa ?, ! y ??.",
+        "mid": "Explica que el compilador obliga a comprobar y que `!` traslada el fallo a runtime.",
+        "senior": "Explica qué aporta la solidez: el compilador elimina comprobaciones y optimiza porque la garantía es total. Menciona la promoción de tipos y por qué no funciona con campos de instancia, y por qué abusar de `!` anula el valor del sistema."
+      },
+      "followUps": [
+        "¿Por qué la promoción de tipos no funciona con campos de clase?",
+        "¿Qué coste tiene usar ! por comodidad?"
+      ]
+    },
+    {
+      "id": "dart-q003",
+      "level": "junior",
+      "topic": "Null safety",
+      "tags": [
+        "null safety",
+        "promocion"
+      ],
+      "prompt": "¿Por qué este código no compila?\n\n```dart\nclass A { String? name; }\n\nvoid f(A a) {\n  if (a.name != null) {\n    print(a.name.length); // error\n  }\n}\n```",
+      "answer": "Porque la **promoción de tipos** no se aplica a campos de instancia que no sean `final`.\n\nCon una variable local, el compilador puede demostrar que nadie la cambia entre la comprobación y el uso. Con `a.name` no puede: es un campo público mutable, y entre las dos líneas podría haber una llamada (o un getter con efectos secundarios, u otro isolate en teoría) que lo ponga a null. El compilador no hace esa suposición porque sería **insólido**, y la solidez es innegociable en Dart.\n\nSoluciones, por orden de preferencia:\n1. Copiar a una local: `final name = a.name; if (name != null) ...`. Es lo idiomático.\n2. Declarar el campo `final`, si el diseño lo permite: entonces sí promociona.\n3. `a.name!.length`: funciona, pero renuncias a la comprobación.",
+      "rubric": {
+        "junior": "Reconoce que hay que copiar a una variable local.",
+        "mid": "Explica que la promoción no aplica a campos mutables y por qué.",
+        "senior": "Relaciona esto con la solidez del sistema de tipos: promocionar sería incorrecto porque un getter puede tener efectos secundarios. Menciona que un campo `final` sí promociona y que este patrón es la razón por la que conviene preferir campos finales."
+      },
+      "followUps": [
+        "¿Y si el campo fuera final?",
+        "¿Un getter puede romper la promoción?"
+      ]
+    },
+    {
+      "id": "dart-q004",
+      "level": "junior",
+      "topic": "Clases",
+      "tags": [
+        "constructores"
+      ],
+      "prompt": "¿Qué tipos de constructores hay en Dart?",
+      "answer": "- **Generativo**: el normal, crea una instancia nueva. `Point(this.x, this.y);`\n- **Nombrado**: varios constructores con nombre distinto. `Point.origin() : x = 0, y = 0;`\n- **Factory**: **no** crea necesariamente una instancia nueva. Puede devolver una cacheada, una de una subclase, o lanzar. Es el único que puede tener cuerpo antes de decidir qué devolver.\n- **Const**: crea instancias en tiempo de compilación, canonizadas. Exige que todos los campos sean `final`.\n- **Redirigido**: delega en otro constructor de la misma clase. `Point.zero() : this(0, 0);`\n\nLa lista de inicialización (`: x = a, y = b`) se ejecuta **antes** del cuerpo y antes del constructor de la superclase, y es el único sitio donde puedes asignar campos `final`.\n\nEl caso práctico más habitual de factory es `fromJson`: valida, decide el subtipo, y puede devolver una instancia compartida.",
+      "rubric": {
+        "junior": "Conoce los constructores normales, nombrados y factory.",
+        "mid": "Explica que un factory puede devolver instancias existentes o de subclases, y sabe para qué sirve la lista de inicialización.",
+        "senior": "Detalla el orden de ejecución (lista de inicialización, super, cuerpo), por qué un const exige campos final y canoniza, y usa factory para singletons, caché de instancias o selección de subtipo en el parseo."
+      },
+      "followUps": [
+        "¿Por qué un factory no puede usar this?",
+        "¿Cuándo devolverías una instancia cacheada?"
+      ]
+    },
+    {
+      "id": "dart-q005",
+      "level": "junior",
+      "topic": "Colecciones",
+      "tags": [
+        "colecciones"
+      ],
+      "prompt": "¿Qué diferencia hay entre List, Set y Map, y cuándo usas cada uno?",
+      "answer": "- **`List<E>`**: secuencia ordenada con índice, admite duplicados. Acceso por índice O(1); `contains` es O(n).\n- **`Set<E>`**: colección sin duplicados y sin orden garantizado (`LinkedHashSet`, el de por defecto, sí conserva el orden de inserción). `contains` y `add` son O(1) amortizado.\n- **`Map<K,V>`**: pares clave-valor, claves únicas. Búsqueda por clave O(1) amortizado.\n\nEl criterio práctico: si te encuentras haciendo `list.contains(x)` dentro de un bucle, tienes un algoritmo O(n²) y probablemente querías un `Set`. Y si necesitas buscar elementos por un identificador, un `Map` indexado por ese id ahorra recorridos.\n\nDetalle que importa: `Set` y `Map` usan `==` y `hashCode`. Si metes objetos propios sin sobrescribirlos, la deduplicación no funciona: cada instancia se considera distinta.",
+      "rubric": {
+        "junior": "Describe las tres correctamente y da un caso de uso de cada una.",
+        "mid": "Menciona las complejidades y el patrón de sustituir contains en bucle por un Set.",
+        "senior": "Señala la dependencia de == y hashCode y sus consecuencias, distingue las implementaciones (LinkedHashMap por defecto, SplayTreeMap si necesitas orden), y menciona el coste de las vistas perezosas frente a materializar con toList()."
+      },
+      "followUps": [
+        "¿Qué pasa si metes objetos sin == en un Set?",
+        "¿Qué es un LinkedHashMap?"
+      ]
+    },
+    {
+      "id": "dart-q006",
+      "level": "junior",
+      "topic": "Funciones",
+      "tags": [
+        "funciones",
+        "parametros"
+      ],
+      "prompt": "¿Cómo funcionan los parámetros opcionales y nombrados en Dart?",
+      "answer": "Dart tiene dos formas de opcionalidad, y no se pueden mezclar en la misma función:\n\n- **Posicionales opcionales**, entre corchetes: `void f(int a, [int? b, int c = 0])`. Se pasan por posición y hay que respetar el orden.\n- **Nombrados**, entre llaves: `void f({int? b, int c = 0})`. Se pasan por nombre y en cualquier orden.\n\nCon null safety, un parámetro nombrado no nullable **debe** ser `required` o tener valor por defecto, porque el compilador no puede garantizar que se pase.\n\nLos valores por defecto tienen que ser constantes de compilación. Por eso `{List<int> items = const []}` funciona y `{List<int> items = []}` no.\n\nCriterio de diseño: a partir de dos o tres parámetros, los nombrados son mucho más legibles en la llamada. `crear(true, false, true)` es ilegible; `crear(activo: true, visible: false, fijado: true)` se entiende sin ir a la definición.",
+      "rubric": {
+        "junior": "Distingue las dos formas y sabe usar required y los valores por defecto.",
+        "mid": "Explica la restricción de constantes en los valores por defecto y por qué required es necesario con null safety.",
+        "senior": "Habla de diseño de API: los nombrados como forma de evitar los boolean traps y de poder añadir parámetros sin romper a los llamadores, y del coste de compatibilidad al cambiar un parámetro de opcional a requerido."
+      },
+      "followUps": [
+        "¿Por qué un valor por defecto debe ser const?",
+        "¿Cuándo usarías posicionales opcionales?"
+      ]
+    },
+    {
+      "id": "dart-q007",
+      "level": "junior",
+      "topic": "Clases",
+      "tags": [
+        "igualdad",
+        "hashcode"
+      ],
+      "prompt": "¿Por qué dos objetos con los mismos datos no son iguales por defecto?",
+      "answer": "Porque el `==` heredado de `Object` compara **identidad**: solo devuelve true si son literalmente el mismo objeto en memoria. Dart no genera igualdad estructural automáticamente.\n\nPara que dos instancias con los mismos campos sean iguales hay que sobrescribir `==` y **también** `hashCode`, siempre los dos. El contrato es: si `a == b`, entonces `a.hashCode == b.hashCode`. Romperlo produce bugs muy desagradables: el objeto se mete en un `Set`, el duplicado no se detecta, o desaparece de un `Map` al buscarlo.\n\nHacerlo a mano es tedioso y fácil de olvidar al añadir un campo. Las opciones reales:\n- **`record`** (Dart 3): igualdad estructural gratis. `(1, 2) == (1, 2)` es true.\n- **Generación de código**: `freezed` o `built_value`.\n- **`Equatable`**: menos código, a costa de algo de rendimiento.\n\nY una advertencia: un objeto mutable usado como clave de un `Map` cuyo `hashCode` cambia después de insertarlo se vuelve inaccesible.",
+      "rubric": {
+        "junior": "Sabe que hay que sobrescribir == y menciona que también hashCode.",
+        "mid": "Explica el contrato entre == y hashCode y las consecuencias de romperlo en Set y Map.",
+        "senior": "Propone records o generación de código en vez de escribirlo a mano, advierte del peligro de usar objetos mutables como clave, y conoce el coste de Equatable frente a una implementación generada."
+      },
+      "followUps": [
+        "¿Qué problema hay con una clave mutable en un Map?",
+        "¿Qué ventaja tiene un record aquí?"
+      ]
+    },
+    {
+      "id": "dart-q008",
+      "level": "junior",
+      "topic": "Asincronía",
+      "tags": [
+        "async",
+        "future"
+      ],
+      "prompt": "¿Qué es un Future y qué hacen async y await?",
+      "answer": "Un `Future<T>` representa un valor que **estará disponible más adelante** (o un error). Tiene tres estados: incompleto, completado con valor, completado con error.\n\n`async` marca una función que devuelve un `Future`: el cuerpo puede suspenderse. `await` suspende la ejecución de esa función hasta que el future se resuelve, y devuelve su valor, **sin bloquear el hilo**: mientras tanto el event loop sigue atendiendo otras cosas.\n\nLo importante que se malinterpreta constantemente: `await` **no crea un hilo ni paralelismo**. Todo ocurre en el mismo isolate. Si dentro haces un cálculo pesado de CPU, bloqueas igual; `async` solo ayuda cuando esperas algo (red, disco, un temporizador).\n\nY para ejecutar varias cosas a la vez: `await a(); await b();` las encadena (tarda la suma). `await Future.wait([a(), b()])` las lanza a la vez (tarda el máximo). Este es uno de los errores de rendimiento más frecuentes.",
+      "rubric": {
+        "junior": "Explica que Future es un valor futuro y que await espera sin bloquear la UI.",
+        "mid": "Aclara que async no da paralelismo y conoce Future.wait para concurrencia.",
+        "senior": "Conecta con el event loop y las colas, explica que un await sobre un future ya completado pasa por la microtask queue, y sabe cuándo el problema exige un isolate en vez de async."
+      },
+      "followUps": [
+        "¿Cómo lanzas dos peticiones en paralelo?",
+        "¿async hace que mi cálculo pesado no bloquee?"
+      ]
+    },
+    {
+      "id": "dart-q009",
+      "level": "junior",
+      "topic": "Errores",
+      "tags": [
+        "excepciones"
+      ],
+      "prompt": "¿Cómo se manejan los errores y qué diferencia hay entre Exception y Error?",
+      "answer": "La sintaxis es `try` / `on` / `catch` / `finally`:\n\n```dart\ntry {\n  ...\n} on FormatException catch (e) {   // tipo concreto\n  ...\n} catch (e, stackTrace) {          // cualquier cosa, con traza\n  ...\n} finally {\n  ...                               // siempre se ejecuta\n}\n```\n\nLa distinción conceptual:\n- **`Exception`**: condiciones que el programa **puede y debe** anticipar. Un fichero que no existe, un JSON mal formado, un timeout. Se capturan y se tratan.\n- **`Error`**: fallos de programación. `StateError`, `ArgumentError`, `RangeError`, un null check fallido. **No deberías capturarlos**: indican un bug que hay que corregir, no una situación a gestionar. Capturarlos oculta el problema.\n\nEn Dart cualquier objeto puede lanzarse, pero lanzar strings es mala práctica: pierdes el tipo y la traza útil.\n\nY `rethrow` en vez de `throw e` cuando quieras relanzar: conserva la traza original, que es justo lo que necesitas para depurar.",
+      "rubric": {
+        "junior": "Usa try/catch y sabe que finally siempre se ejecuta.",
+        "mid": "Distingue Exception de Error conceptualmente y usa `on` para tipos concretos y rethrow.",
+        "senior": "Argumenta que los errores esperados del dominio se modelan mejor como valores de retorno (un tipo Result o una sealed class) que como excepciones, reservando estas para lo verdaderamente excepcional, y explica por qué capturar Error genérico enmascara bugs."
+      },
+      "followUps": [
+        "¿Por qué rethrow y no throw e?",
+        "¿Excepciones o un tipo Result?"
+      ]
+    },
+    {
+      "id": "dart-q010",
+      "level": "junior",
+      "topic": "Sintaxis",
+      "tags": [
+        "cascade",
+        "spread"
+      ],
+      "prompt": "¿Qué hacen el operador cascade (..), el spread (...) y los collection-if?",
+      "answer": "**Cascade (`..`)**: encadena operaciones sobre el mismo objeto sin repetir su nombre. La expresión devuelve el objeto, no el resultado de la última llamada.\n\n```dart\nfinal paint = Paint()\n  ..color = Colors.red\n  ..strokeWidth = 2;\n```\nExiste `?..` para el caso nullable.\n\n**Spread (`...`)**: inserta todos los elementos de una colección dentro de otra. `...?` no hace nada si la colección es null.\n\n```dart\nfinal all = [...base, ...extra, if (isAdmin) ...adminOnly];\n```\n\n**Collection-if y collection-for**: condicionales y bucles **dentro** del literal de la colección. Es lo que hace que construir listas de widgets condicionalmente sea legible, en lugar de un `List` que se va rellenando con `add`.\n\n```dart\nchildren: [\n  const Header(),\n  if (hasError) const ErrorBanner(),\n  for (final item in items) ItemTile(item),\n]\n```\n\nEl valor real de estas tres no es escribir menos: es que la lista se lee como una **descripción declarativa** en vez de como un procedimiento.",
+      "rubric": {
+        "junior": "Explica qué hace cada uno con un ejemplo.",
+        "mid": "Menciona las variantes null-aware (?.., ...?) y usa collection-if/for de forma natural.",
+        "senior": "Argumenta el valor en legibilidad: expresiones declarativas frente a construcción imperativa, y sabe que el cascade devuelve el receptor, lo que permite construir y configurar en una sola expresión (útil en listas const y campos final)."
+      },
+      "followUps": [
+        "¿Qué devuelve una expresión con cascade?",
+        "¿Por qué collection-if es mejor que construir la lista con add?"
+      ]
+    },
+    {
+      "id": "dart-q011",
+      "level": "junior",
+      "topic": "Tipos",
+      "tags": [
+        "dynamic",
+        "object"
+      ],
+      "prompt": "¿Qué diferencia hay entre dynamic, Object y Object?",
+      "answer": "- **`Object?`**: el tipo tope. Cualquier valor, incluido null. Es **seguro**: el compilador no te deja llamar a nada que `Object` no tenga hasta que compruebes el tipo.\n- **`Object`**: cualquier valor **excepto** null.\n- **`dynamic`**: desactiva la comprobación de tipos. El compilador acepta cualquier llamada sobre él y traslada el fallo a runtime.\n\n`dynamic` no es \"un tipo que puede ser cualquier cosa\": es **renunciar al sistema de tipos** en ese punto. `foo.metodoQueNoExiste()` compila sin rechistar y revienta al ejecutarse.\n\nCuándo aparece legítimamente: al parsear JSON (`jsonDecode` devuelve `dynamic`) y al interoperar con APIs sin tipar. La práctica correcta es **convertirlo a un tipo concreto cuanto antes**, en el borde del sistema, y que el resto del código trabaje con tipos reales.\n\nSi lo que quieres es \"cualquier cosa, pero de forma segura\", el tipo es `Object?`, no `dynamic`.",
+      "rubric": {
+        "junior": "Sabe que dynamic evita la comprobación de tipos.",
+        "mid": "Prefiere Object? cuando quiere aceptar cualquier valor y limita dynamic a los bordes del sistema.",
+        "senior": "Explica que dynamic desactiva la comprobación en ambas direcciones y tiene coste en rendimiento (despacho dinámico), y defiende una arquitectura donde los datos sin tipar se validan y convierten en la frontera para que el núcleo esté siempre tipado."
+      },
+      "followUps": [
+        "¿Qué devuelve jsonDecode y qué haces con ello?",
+        "¿Tiene dynamic coste en rendimiento?"
+      ]
+    },
+    {
+      "id": "dart-q012",
+      "level": "junior",
+      "topic": "Clases",
+      "tags": [
+        "getters",
+        "setters"
+      ],
+      "prompt": "¿Para qué sirven los getters y setters si puedo usar campos públicos?",
+      "answer": "En Dart, un campo público **ya es** un getter y un setter implícitos. Esa es la clave: puedes empezar con un campo simple y convertirlo después en un getter calculado **sin romper a quien te usa**, porque la sintaxis de llamada no cambia. En otros lenguajes esto obliga a un cambio de API y por eso allí se escriben getters desde el principio; en Dart no hace falta.\n\nDónde aportan de verdad:\n- **Valores derivados**: `bool get isEmpty => items.isEmpty;` no almacena nada.\n- **Encapsular**: exponer `List<Item> get items => List.unmodifiable(_items);` impide que desde fuera muteen tu lista interna.\n- **Validar** en el setter.\n\nY un aviso: un getter debe ser **barato y sin efectos secundarios**. Quien lo llama espera acceder a una propiedad, no disparar una consulta a la base de datos. Si cuesta, que sea un método con nombre de verbo.",
+      "rubric": {
+        "junior": "Sabe declarar getters y setters y para qué sirven.",
+        "mid": "Usa getters para valores derivados y para encapsular colecciones internas.",
+        "senior": "Señala que en Dart un campo público ya es un getter, por lo que escribirlos de entrada es ruido; y defiende la convención de que un getter sea barato y puro, porque su coste no es visible en el punto de llamada."
+      },
+      "followUps": [
+        "¿Cómo expones una lista sin que la muten desde fuera?",
+        "¿Cuándo debería ser un método y no un getter?"
+      ]
+    },
+    {
+      "id": "dart-q013",
+      "level": "junior",
+      "topic": "Colecciones",
+      "tags": [
+        "iterables",
+        "perezoso"
+      ],
+      "prompt": "¿Qué devuelve map() y por qué a veces el código dentro no se ejecuta?",
+      "answer": "`map()` devuelve un `Iterable<T>` **perezoso**: no ejecuta nada al llamarlo. Solo crea una vista que aplicará la función cuando alguien recorra el resultado.\n\nPor eso esto no imprime nada:\n\n```dart\n[1, 2, 3].map((n) { print(n); return n * 2; });  // silencio\n```\n\nY esto sí:\n\n```dart\n[1, 2, 3].map((n) { print(n); return n * 2; }).toList();\n```\n\nLa pereza es una ventaja: encadenar `where().map().take(3)` sobre un millón de elementos solo procesa los que hagan falta, sin listas intermedias.\n\nPero tiene dos trampas:\n1. **Efectos secundarios que no ocurren**, como el ejemplo. Si quieres efectos, usa `forEach` o un `for`, que es más idiomático.\n2. **Reevaluación**: recorrer el mismo iterable perezoso dos veces ejecuta la función dos veces. Si el cálculo es caro o no determinista, materializa con `toList()`.\n\nY para efectos secundarios sobre una colección, un `for` normal se lee mejor que `forEach` con una closure.",
+      "rubric": {
+        "junior": "Sabe que hay que llamar a toList() para materializar.",
+        "mid": "Explica la evaluación perezosa y la ventaja de encadenar sin listas intermedias.",
+        "senior": "Advierte de la reevaluación al recorrer varias veces y de su coste, distingue cuándo materializar de cuándo mantener la pereza, y prefiere un for a forEach para efectos secundarios."
+      },
+      "followUps": [
+        "¿Qué pasa si recorres dos veces el resultado de un map?",
+        "¿Cuándo conviene NO llamar a toList()?"
+      ]
+    },
+    {
+      "id": "dart-q014",
+      "level": "junior",
+      "topic": "Clases",
+      "tags": [
+        "enums",
+        "dart3"
+      ],
+      "prompt": "¿Qué son los enhanced enums de Dart?",
+      "answer": "Desde Dart 2.17, un `enum` puede tener campos, constructor, métodos y getters, e implementar interfaces. Deja de ser una lista de nombres para ser una clase con un conjunto cerrado de instancias.\n\n```dart\nenum Status {\n  active('Activo', Colors.green),\n  paused('En pausa', Colors.orange),\n  closed('Cerrado', Colors.grey);\n\n  const Status(this.label, this.color);\n\n  final String label;\n  final Color color;\n\n  bool get isEditable => this != closed;\n}\n```\n\nLo que esto elimina es un antipatrón muy extendido: el `switch` gigante en una función suelta que mapea cada valor del enum a su etiqueta, a su color y a su icono, repartido por tres ficheros distintos. Con enhanced enums, el dato vive **junto** al valor y añadir una variante te obliga a completarla ahí mismo.\n\nY siguen teniendo lo bueno de los enums: `values`, `index`, `name`, y `switch` exhaustivo comprobado por el compilador.",
+      "rubric": {
+        "junior": "Sabe que un enum puede tener campos y métodos y da un ejemplo.",
+        "mid": "Lo usa para eliminar switches de mapeo y aprovecha la exhaustividad del switch.",
+        "senior": "Compara con sealed classes: enum para un conjunto cerrado de valores sin estado propio, sealed class cuando cada variante lleva datos distintos. Menciona el riesgo de persistir `index` en vez de `name`, porque reordenar el enum corrompe los datos guardados."
+      },
+      "followUps": [
+        "¿Enum o sealed class?",
+        "¿Por qué es peligroso guardar el index en base de datos?"
+      ]
+    },
+    {
+      "id": "dart-q015",
+      "level": "junior",
+      "topic": "Sintaxis",
+      "tags": [
+        "strings"
+      ],
+      "prompt": "¿Cómo se trabaja con strings en Dart? Interpolación, multilínea y caracteres.",
+      "answer": "**Interpolación**: `'Hola $nombre'` para una variable simple, `'Total: ${a + b}'` para una expresión. Se prefiere a concatenar con `+`: es más legible y no crea strings intermedios.\n\n**Multilínea**: comillas triples `'''...'''`. **Raw strings**: `r'C:\\ruta\\sin\\escapes'`, imprescindible para expresiones regulares.\n\n**Inmutabilidad**: los strings son inmutables. Concatenar en un bucle crea un objeto nuevo en cada vuelta, lo que es O(n²). Para construir texto incremental hay que usar `StringBuffer`.\n\n**Y el detalle que casi nadie sabe hasta que le muerde**: `String` es una secuencia de **UTF-16 code units**, no de caracteres visibles. `'👨‍👩‍👧'.length` no es 1. Un emoji con modificadores, una tilde compuesta o un carácter fuera del plano básico ocupan varias unidades. Para trabajar con caracteres tal como los ve el usuario (grafemas), está el paquete `characters`: `'👨‍👩‍👧'.characters.length` sí da 1.\n\nCortar un string por índice sin tener esto en cuenta es una fuente clásica de texto roto.",
+      "rubric": {
+        "junior": "Usa interpolación, multilínea y raw strings.",
+        "mid": "Sabe que los strings son inmutables y usa StringBuffer para concatenación en bucle.",
+        "senior": "Explica la diferencia entre code units, code points y grafemas, y usa el paquete characters para cualquier manipulación visible al usuario. Menciona el coste O(n²) de concatenar en bucle."
+      },
+      "followUps": [
+        "¿Por qué '👨‍👩‍👧'.length no es 1?",
+        "¿Cuándo usarías StringBuffer?"
+      ]
+    },
+    {
+      "id": "dart-q016",
+      "level": "junior",
+      "topic": "Herramientas",
+      "tags": [
+        "pubspec",
+        "paquetes"
+      ],
+      "prompt": "¿Qué es pubspec.yaml y cómo funciona el versionado de dependencias?",
+      "answer": "`pubspec.yaml` declara el nombre del paquete, la versión, las restricciones de SDK y las dependencias. `pub` resuelve un grafo que satisfaga todas las restricciones y escribe el resultado exacto en **`pubspec.lock`**.\n\nLa notación habitual, `^1.2.3`, significa \"compatible según semver\": permite cualquier versión desde 1.2.3 hasta antes de 2.0.0. Se apoya en la promesa de que un cambio de versión mayor es el único que puede romper la API.\n\n`dependencies` frente a `dev_dependencies`: las segundas (test, linters, generadores de código) no se incluyen en quien te consuma como paquete.\n\nY la regla sobre el lock, que genera debate: **en una aplicación, `pubspec.lock` se commitea** (quieres builds reproducibles entre desarrolladores y CI); **en un paquete de librería, no** (quieres probar contra el abanico de versiones que tus restricciones permiten).\n\nPara depender de algo que no está en pub.dev: `path` para un paquete local, `git` con `ref` para un repositorio (fijando siempre un commit o tag, nunca una rama).",
+      "rubric": {
+        "junior": "Sabe añadir dependencias y distingue dependencies de dev_dependencies.",
+        "mid": "Entiende el caret, semver y para qué sirve pubspec.lock.",
+        "senior": "Conoce la regla de commitear el lock en apps pero no en librerías y la justifica, usa dependency_overrides como último recurso consciente, y fija commits concretos en dependencias de git."
+      },
+      "followUps": [
+        "¿Se commitea pubspec.lock?",
+        "¿Qué hace dependency_overrides y por qué es peligroso?"
+      ]
+    },
+    {
+      "id": "dart-q017",
+      "level": "junior",
+      "topic": "Herramientas",
+      "tags": [
+        "lint",
+        "analisis"
+      ],
+      "prompt": "¿Qué es analysis_options.yaml y por qué importa en un equipo?",
+      "answer": "Es el fichero que configura el analizador de Dart: qué lints están activos, qué se considera error y qué carpetas se excluyen.\n\n```yaml\ninclude: package:flutter_lints/flutter.yaml\n\nanalyzer:\n  language:\n    strict-casts: true      # prohíbe casts implícitos desde dynamic\n    strict-raw-types: true  # prohíbe genéricos sin parametrizar\n  errors:\n    invalid_annotation_target: ignore\n\nlinter:\n  rules:\n    - prefer_const_constructors\n    - avoid_print\n    - unawaited_futures\n```\n\nPor qué importa en equipo: **convierte las discusiones de estilo en configuración**. Una regla acordada una vez y verificada por la máquina ahorra la misma conversación en cada revisión de código, y elimina la variable personal del que revisa.\n\nLas opciones `strict-*` son las que más aportan y casi nadie activa: cierran agujeros por los que `dynamic` se cuela silenciosamente.\n\nY para que sirva de algo, `flutter analyze --fatal-infos` tiene que estar en CI. Un aviso que nadie mira es ruido que enseña al equipo a ignorar los avisos.",
+      "rubric": {
+        "junior": "Sabe que configura el linter y que hay paquetes de reglas predefinidos.",
+        "mid": "Personaliza reglas, entiende la diferencia entre info, warning y error, y lo integra en CI.",
+        "senior": "Usa los modos strict para cerrar agujeros del sistema de tipos, defiende automatizar el estilo para sacarlo de las revisiones humanas, y trata los avisos ignorados como deuda que degrada la señal del análisis."
+      },
+      "followUps": [
+        "¿Qué hacen las opciones strict-casts y strict-raw-types?",
+        "¿Por qué --fatal-infos en CI?"
+      ]
+    },
+    {
+      "id": "dart-q018",
+      "level": "mid",
+      "topic": "Sistema de tipos",
+      "tags": [
+        "genericos"
+      ],
+      "prompt": "¿Cómo funcionan los genéricos en Dart y qué es la varianza?",
+      "answer": "Los genéricos parametrizan tipos: `List<int>`, `Future<User>`, o los tuyos: `class Cache<K, V>`. Se pueden acotar con `extends`: `class Repo<T extends Entity>` garantiza que `T` tiene la API de `Entity`.\n\nSobre la **varianza**, Dart toma una decisión poco habitual: los genéricos son **covariantes** por defecto. `List<int>` es subtipo de `List<num>`.\n\nEso es cómodo para leer, pero **no es sólido para escribir**:\n\n```dart\nList<num> numeros = <int>[1, 2];  // permitido\nnumeros.add(3.5);                  // compila... y revienta en runtime\n```\n\nDart lo acepta porque la alternativa (invarianza estricta, como en Java sin comodines) resulta incómoda en la práctica, y cubre el agujero con una **comprobación en tiempo de ejecución**. Es una concesión de pragmatismo sobre pureza, y conviene saberlo porque es de los pocos sitios donde el sistema de tipos de Dart no te protege en compilación.\n\nA diferencia de Java, los genéricos de Dart están **reificados**: el tipo existe en runtime, así que `list is List<int>` funciona de verdad.",
+      "rubric": {
+        "junior": "Usa genéricos y sabe acotarlos con extends.",
+        "mid": "Sabe que los genéricos son covariantes y que eso puede fallar en runtime al escribir.",
+        "senior": "Explica el compromiso entre solidez y ergonomía que hizo el lenguaje, señala que Dart reifica los genéricos (a diferencia del type erasure de Java) y qué permite eso, y menciona el uso de `covariant` en parámetros para estrechar tipos conscientemente."
+      },
+      "followUps": [
+        "¿Qué significa que los genéricos estén reificados?",
+        "¿Para qué sirve la palabra clave covariant?"
+      ]
+    },
+    {
+      "id": "dart-q019",
+      "level": "mid",
+      "topic": "Clases",
+      "tags": [
+        "mixins",
+        "herencia"
+      ],
+      "prompt": "¿Qué diferencia hay entre extends, implements, with y la palabra clave mixin?",
+      "answer": "- **`extends`**: herencia simple. Heredas implementación y puedes llamar a `super`. Una sola superclase.\n- **`implements`**: tomas solo el **contrato**. Debes reimplementar absolutamente todo, incluso lo que la otra clase ya tenía resuelto. En Dart **cualquier clase define implícitamente una interfaz**, así que puedes hacer `implements` de una clase concreta.\n- **`with`**: aplica mixins. Aportan implementación reutilizable sin herencia, y puedes aplicar varios.\n- **`mixin`**: declara algo pensado para mezclarse, que no se puede instanciar ni extender. Con `on Tipo` restringes dónde puede aplicarse, lo que te permite llamar a métodos de ese tipo desde dentro del mixin.\n\nLa resolución de conflictos usa **linearización**: los mixins se apilan en orden, y el último gana. `class A extends B with M1, M2` construye una cadena B → M1 → M2 → A.\n\nCriterio práctico: mixin para comportamiento transversal sin estado propio complejo (logging, validación, un `TickerProvider`). Si necesitas guardar estado o hay varias implementaciones alternativas, **composición** antes que mixin: un mixin es herencia con otro nombre, y arrastra sus mismos problemas de acoplamiento.",
+      "rubric": {
+        "junior": "Distingue extends de implements y sabe que with aplica mixins.",
+        "mid": "Sabe que implements obliga a reimplementar todo, y usa `on` para restringir un mixin.",
+        "senior": "Explica la linearización y el orden de resolución, y argumenta cuándo la composición es preferible a un mixin porque este acopla y complica la jerarquía. Menciona los modificadores de clase de Dart 3 (base, final, interface, sealed) como forma de controlar todo esto explícitamente."
+      },
+      "followUps": [
+        "¿En qué orden se resuelven dos mixins con el mismo método?",
+        "¿Qué hacen los modificadores base, final e interface de Dart 3?"
+      ]
+    },
+    {
+      "id": "dart-q020",
+      "level": "mid",
+      "topic": "Dart 3",
+      "tags": [
+        "sealed",
+        "patrones"
+      ],
+      "prompt": "¿Qué son las sealed classes y el pattern matching de Dart 3?",
+      "answer": "Una `sealed class` es abstracta y sus subtipos **solo pueden declararse en la misma librería**. Eso le da al compilador algo valioso: conoce el conjunto completo de variantes, así que puede comprobar que un `switch` las cubre **todas**. Si añades una variante y olvidas un switch, no compila.\n\nCombinado con patrones:\n\n```dart\nsealed class Result<T> {}\nclass Ok<T> extends Result<T> { Ok(this.value); final T value; }\nclass Err<T> extends Result<T> { Err(this.error); final Object error; }\n\nfinal message = switch (result) {\n  Ok(value: final v) => 'Correcto: $v',\n  Err(error: final e) => 'Falló: $e',\n};\n```\n\nEl `switch` es una **expresión** que devuelve valor, se desestructura en el propio patrón, y es exhaustivo por construcción.\n\nPor qué importa de verdad: convierte errores de runtime en errores de compilación. El caso típico es el estado de una pantalla: con banderas sueltas puedes representar estados imposibles; con una sealed class, el conjunto de estados válidos es el único representable, y el compilador te obliga a tratarlos todos.\n\nHay más patrones: registros, listas, mapas, guardas con `when`, y desestructuración en declaraciones (`final (a, b) = pair;`).",
+      "rubric": {
+        "junior": "Sabe que existen y que el switch obliga a cubrir todos los casos.",
+        "mid": "Usa switch expression con desestructuración y modela estados con sealed classes.",
+        "senior": "Articula el principio de hacer irrepresentables los estados imposibles, compara con el enfoque de banderas y sus combinaciones inválidas, y sabe cuándo un enum basta y cuándo hace falta una sealed class porque las variantes llevan datos distintos."
+      },
+      "followUps": [
+        "¿Cómo modelarías el estado de una pantalla con sealed classes?",
+        "¿Cuándo basta un enum?"
+      ]
+    },
+    {
+      "id": "dart-q021",
+      "level": "mid",
+      "topic": "Dart 3",
+      "tags": [
+        "records"
+      ],
+      "prompt": "¿Qué son los records y cuándo los usas en lugar de una clase?",
+      "answer": "Un record es una **tupla anónima con igualdad estructural**. Agrupa valores sin declarar un tipo:\n\n```dart\n(int, String) pair = (1, 'uno');              // posicional\n({int code, String message}) r = (code: 404, message: 'No existe'); // nombrado\n\nfinal (code, message) = fetch();               // desestructuración\n```\n\nSon inmutables, tienen `==` y `hashCode` estructurales gratis, y se pueden usar como clave de un `Map` o en un `Set` sin escribir nada.\n\nSu caso estrella es **devolver varios valores** sin inventar una clase de un solo uso ni abusar de `List<dynamic>`.\n\nCuándo **no** usarlos: cuando el conjunto de datos tiene identidad de dominio y aparece por toda la aplicación. Un record `(String, String)` no dice si es (nombre, apellido) o (apellido, nombre); una clase `Persona` sí, y además puede tener validación, métodos y documentación.\n\nRegla práctica: record para datos **locales y efímeros**, clase para conceptos del dominio. Si el record empieza a viajar entre capas, es señal de que quería ser una clase.",
+      "rubric": {
+        "junior": "Sabe que sirven para devolver varios valores.",
+        "mid": "Usa records nombrados y desestructuración, y conoce su igualdad estructural.",
+        "senior": "Define el límite: records para datos locales sin identidad de dominio, clases cuando hay invariantes, validación o significado que documentar. Menciona que un record no puede tener métodos ni constructores, lo que evita que se convierta en una clase encubierta."
+      },
+      "followUps": [
+        "¿Un record puede tener métodos?",
+        "¿Cuándo un record debería haber sido una clase?"
+      ]
+    },
+    {
+      "id": "dart-q022",
+      "level": "mid",
+      "topic": "Asincronía",
+      "tags": [
+        "streams",
+        "generadores"
+      ],
+      "prompt": "¿Qué hacen sync* y async*, y qué es un generador?",
+      "answer": "Son generadores: funciones que producen una secuencia de valores **perezosamente**, usando `yield` en lugar de construir la colección entera.\n\n- **`sync*`** devuelve un `Iterable<T>`. Se ejecuta bajo demanda: cada `moveNext()` del consumidor avanza la función hasta el siguiente `yield` y la congela ahí.\n- **`async*`** devuelve un `Stream<T>`. Puede hacer `await` entre emisiones.\n- **`yield*`** delega en otra secuencia, lo que permite recursión limpia (recorrer un árbol, por ejemplo).\n\nLa ventaja es la memoria y la latencia: un generador de números primos puede ser infinito, y el consumidor toma los que necesite sin que se materialice nada.\n\n```dart\nIterable<int> naturales() sync* {\n  var n = 0;\n  while (true) yield n++;   // infinito, y no pasa nada\n}\n\nnaturales().take(5).toList();  // [0, 1, 2, 3, 4]\n```\n\nEl detalle que sorprende: el cuerpo de un `sync*` **no se ejecuta en absoluto** hasta que alguien recorre el iterable. Si pones un `print` al principio esperando verlo al llamar a la función, no aparece.",
+      "rubric": {
+        "junior": "Sabe que yield emite valores y distingue sync* de async*.",
+        "mid": "Explica la evaluación perezosa y usa yield* para delegar.",
+        "senior": "Aprovecha generadores para secuencias infinitas o costosas, entiende que el cuerpo no corre hasta que se consume, y sabe que en async* la contrapresión del consumidor pausa realmente la producción."
+      },
+      "followUps": [
+        "¿Cómo haces una secuencia infinita sin agotar la memoria?",
+        "¿Qué pasa con la contrapresión en un async*?"
+      ]
+    },
+    {
+      "id": "dart-q023",
+      "level": "mid",
+      "topic": "Asincronía",
+      "tags": [
+        "streams",
+        "transformaciones"
+      ],
+      "prompt": "¿Cómo transformas y combinas streams, y qué hay que vigilar?",
+      "answer": "La librería estándar trae lo básico: `map`, `where`, `expand`, `take`, `skip`, `distinct`, `asyncMap` (transformación asíncrona, en orden), `handleError`, `timeout`.\n\nPara combinaciones y operadores más ricos (`switchMap`, `debounceTime`, `combineLatest`, `BehaviorSubject`), hace falta `rxdart` o construirlos a mano con `StreamController` y `StreamTransformer`.\n\nLo que hay que vigilar, por orden de frecuencia:\n1. **Cancelar la suscripción**. Todo `listen()` devuelve un `StreamSubscription` que hay que `cancel()`. Es la fuga de memoria número uno en Dart.\n2. **Cerrar el `StreamController`**. Si lo creas tú, lo cierras tú.\n3. **Errores**: un error no gestionado en un stream puede tumbar la zona entera. `onError` en el `listen` o `handleError` en la cadena.\n4. **Single-subscription vs broadcast**: suscribirse dos veces al primero lanza una excepción, y convertir a broadcast pierde los eventos emitidos antes de suscribirse.\n5. **`asyncMap` frente a `asyncExpand`**: el primero mantiene el orden y espera; el segundo puede solapar. Elegir mal produce resultados desordenados.",
+      "rubric": {
+        "junior": "Usa map y where sobre streams y sabe suscribirse con listen.",
+        "mid": "Cancela suscripciones, cierra controllers y gestiona errores del stream.",
+        "senior": "Conoce switchMap para cancelar trabajo obsoleto (el caso del buscador), distingue asyncMap de asyncExpand en cuanto a orden y solapamiento, y diseña la propiedad de los streams para que quede claro quién cierra qué."
+      },
+      "followUps": [
+        "¿Qué operador usarías para un buscador con cancelación?",
+        "¿Quién debe cerrar un StreamController?"
+      ]
+    },
+    {
+      "id": "dart-q024",
+      "level": "mid",
+      "topic": "Asincronía",
+      "tags": [
+        "completer",
+        "control"
+      ],
+      "prompt": "¿Qué es un Completer y cuándo lo necesitas?",
+      "answer": "Un `Completer<T>` te da un `Future` cuyo momento de resolución controlas tú desde fuera, en vez de que lo determine el cuerpo de una función `async`.\n\n```dart\nfinal completer = Completer<String>();\nalgo.onEvent = (valor) => completer.complete(valor);\nfinal resultado = await completer.future;\n```\n\nCasos legítimos:\n- **Adaptar una API de callbacks a Futures**: platform channels antiguos, SDKs nativos, librerías con `onSuccess`/`onError`.\n- **Esperar a un evento externo** que no es una llamada: la primera emisión de un stream, la confirmación de una conexión.\n- **En tests**, para controlar exactamente cuándo se resuelve algo y poder observar el estado intermedio de carga.\n\nCuándo **no** usarlo: si puedes escribir una función `async`, escríbela. Un `Completer` alrededor de código que ya devuelve futures es ruido y una fuente de errores.\n\nLos dos fallos clásicos: **completarlo dos veces** (lanza `StateError`, hay que comprobar `isCompleted`) y **no completarlo nunca** en algún camino de error, lo que deja al llamador esperando para siempre. Este segundo es peor porque no da ningún síntoma: simplemente nada avanza.",
+      "rubric": {
+        "junior": "Sabe que crea un Future que se completa manualmente.",
+        "mid": "Lo usa para adaptar callbacks a futures y comprueba isCompleted.",
+        "senior": "Delimita cuándo es necesario y cuándo es ruido, identifica el camino de error sin completar como bug silencioso, y lo usa en tests para controlar el tiempo y observar estados intermedios."
+      },
+      "followUps": [
+        "¿Qué pasa si completas dos veces?",
+        "¿Cómo lo usarías en un test?"
+      ]
+    },
+    {
+      "id": "dart-q025",
+      "level": "mid",
+      "topic": "Concurrencia",
+      "tags": [
+        "isolates"
+      ],
+      "prompt": "¿Qué es un isolate y en qué se diferencia de un hilo?",
+      "answer": "Un isolate es una unidad de ejecución con **su propio heap y su propio event loop**. No comparte memoria con ningún otro isolate.\n\nEsa es la diferencia esencial con un hilo tradicional: los hilos comparten memoria, y de ahí vienen las condiciones de carrera, los mutex, los deadlocks y los bugs más difíciles de reproducir del oficio. Al no compartir memoria, en Dart **no hacen falta locks**: es imposible que dos isolates corrompan el mismo objeto.\n\nEl precio es la comunicación: solo mensajes, a través de `SendPort` y `ReceivePort`, y los objetos se **copian** al enviarlos. Para datos grandes eso cuesta O(tamaño). Hay excepciones: `TransferableTypedData` transfiere bytes sin copiar (cediendo la propiedad), y desde Dart 2.15 los **isolate groups** comparten el código compilado y algunas estructuras internas, lo que abarató mucho crear isolates.\n\nAPIs: `Isolate.run()` para una tarea puntual (lo habitual hoy), `compute()` en Flutter, y `Isolate.spawn()` con puertos para un worker persistente.",
+      "rubric": {
+        "junior": "Sabe que dan paralelismo real y que no comparten memoria.",
+        "mid": "Explica la comunicación por mensajes con copia y conoce Isolate.run.",
+        "senior": "Argumenta que la ausencia de memoria compartida elimina por diseño toda una clase de bugs de concurrencia, cuantifica el coste de arranque y de copia, y conoce isolate groups y TransferableTypedData como mitigaciones."
+      },
+      "followUps": [
+        "¿Por qué no hacen falta mutex en Dart?",
+        "¿Qué se puede enviar por un SendPort?"
+      ]
+    },
+    {
+      "id": "dart-q026",
+      "level": "mid",
+      "topic": "Clases",
+      "tags": [
+        "inmutabilidad"
+      ],
+      "prompt": "¿Cómo se consigue inmutabilidad real en Dart?",
+      "answer": "Con capas, porque `final` solo protege la referencia:\n\n1. **Todos los campos `final`** y constructor `const` si es posible.\n2. **Las colecciones también**: `final List` se puede mutar. Hay que guardar `List.unmodifiable(items)` o exponer solo una vista no modificable. Si aceptas una lista por constructor, cópiala: quien te la pasó conserva su referencia y puede mutarla después.\n3. **Inmutabilidad profunda**: si tus campos son objetos, también tienen que ser inmutables. Una clase \"inmutable\" con un campo mutable no lo es.\n4. **`@immutable`** de `package:meta` hace que el analizador avise si algún campo no es final. Es una comprobación, no una garantía.\n5. **`copyWith`** para \"modificar\": devuelve una instancia nueva con los cambios.\n\nHacerlo a mano en cada clase es repetitivo y se degrada, así que en la práctica se genera con `freezed` o `built_value`, o se usan `record` para casos simples.\n\nPor qué merece la pena: un objeto inmutable se puede compartir entre isolates y cachés sin miedo, la igualdad estructural tiene sentido, y desaparece toda una categoría de bugs de \"alguien me cambió el objeto por debajo\".",
+      "rubric": {
+        "junior": "Usa final en los campos y sabe que existe copyWith.",
+        "mid": "Sabe que final no protege el contenido de una colección y usa unmodifiable o copias defensivas.",
+        "senior": "Razona sobre inmutabilidad profunda, el problema de la lista recibida por constructor que el llamador conserva, y el papel de la generación de código para que la disciplina no dependa de recordarlo en cada clase."
+      },
+      "followUps": [
+        "¿Por qué copiar una lista recibida por constructor?",
+        "¿Qué garantiza @immutable exactamente?"
+      ]
+    },
+    {
+      "id": "dart-q027",
+      "level": "mid",
+      "topic": "Extensiones",
+      "tags": [
+        "extensiones"
+      ],
+      "prompt": "¿Qué son las extension methods y qué limitaciones tienen?",
+      "answer": "Permiten añadir métodos, getters y operadores a un tipo existente sin heredarlo ni modificarlo:\n\n```dart\nextension StringX on String {\n  bool get isEmail => contains('@');\n  String capitalize() => isEmpty ? this : this[0].toUpperCase() + substring(1);\n}\n```\n\nLimitaciones importantes:\n- **Se resuelven estáticamente**, según el tipo declarado de la variable, no el real. Sobre una variable `dynamic` **no funcionan en absoluto**.\n- No pueden **añadir campos** (no hay estado nuevo) ni **sobrescribir** un miembro existente: si el tipo ya tiene ese método, gana el del tipo.\n- Requieren que la extensión esté **importada** en el fichero donde se usa; no son globales.\n- Dos extensiones con el mismo nombre de método sobre el mismo tipo crean una ambigüedad que hay que resolver explícitamente.\n\nCuándo son buena idea: utilidades sobre tipos que no controlas (`DateTime`, `String`, tipos del framework). Cuándo no: para meter lógica de dominio, porque el código resultante es difícil de descubrir (no aparece en la definición del tipo) y de testear aislado.",
+      "rubric": {
+        "junior": "Sabe declarar y usar una extensión.",
+        "mid": "Conoce la resolución estática, que no funcionan con dynamic y que no añaden estado.",
+        "senior": "Discute el coste de descubribilidad para el equipo, resuelve conflictos de nombres explícitamente, y sitúa el límite entre utilidad legítima y lógica de dominio que debería vivir en su propio tipo."
+      },
+      "followUps": [
+        "¿Por qué no funcionan sobre dynamic?",
+        "¿Qué pasa si dos extensiones definen el mismo método?"
+      ]
+    },
+    {
+      "id": "dart-q028",
+      "level": "mid",
+      "topic": "Testing",
+      "tags": [
+        "testing"
+      ],
+      "prompt": "¿Cómo pruebas código asíncrono en Dart?",
+      "answer": "Lo básico: marca el test como `async` y usa `await`. Para expectativas sobre futures, `expectLater` con matchers como `completion` y `throwsA`:\n\n```dart\nawait expectLater(repo.load(), completion(hasLength(3)));\nawait expectLater(repo.fail(), throwsA(isA<NetworkException>()));\n```\n\nPara streams, `emitsInOrder`, `emitsError`, `emitsDone`, `neverEmits`.\n\nLo que marca la diferencia es **controlar el tiempo**. Un test que espera tres segundos reales para comprobar un debounce es un test lento y frágil. `fakeAsync` (del paquete `fake_async`) sustituye el reloj: `async.elapse(Duration(seconds: 3))` avanza el tiempo **instantáneamente** y ejecuta los timers y microtasks pendientes.\n\nY dos detalles que evitan tests intermitentes:\n- **Nunca `Future.delayed` real** en un test para \"esperar a que pase algo\". Es la causa número uno de flakiness en CI, donde la máquina va más lenta.\n- **Comprobar que no quedan timers ni suscripciones vivos** al terminar. El framework de test avisa (`A Timer is still pending`) y conviene tratarlo como un fallo, no como ruido: suele delatar una fuga real en el código de producción.",
+      "rubric": {
+        "junior": "Escribe tests async con await y expect.",
+        "mid": "Usa expectLater, matchers de stream y sabe que hay que evitar esperas reales.",
+        "senior": "Usa fakeAsync para controlar el tiempo de forma determinista, trata los timers pendientes como indicio de fuga en producción, y diseña el código inyectando el reloj para que sea testeable sin trucos."
+      },
+      "followUps": [
+        "¿Cómo pruebas un debounce de 300 ms sin esperar 300 ms?",
+        "¿Qué significa 'A Timer is still pending'?"
+      ]
+    },
+    {
+      "id": "dart-q029",
+      "level": "mid",
+      "topic": "Herramientas",
+      "tags": [
+        "codegen",
+        "build runner"
+      ],
+      "prompt": "¿Qué es build_runner y por qué Dart depende tanto de la generación de código?",
+      "answer": "Dart **no tiene reflexión en runtime** en los binarios AOT: `dart:mirrors` no está disponible en Flutter ni en compilación AOT, porque la reflexión impide el tree shaking (el compilador no puede saber qué código es alcanzable si cualquier cosa puede invocarse por nombre).\n\nEsa decisión tiene un precio: todo lo que en otros lenguajes se resuelve con anotaciones y reflexión en tiempo de ejecución, aquí hay que **generarlo en tiempo de compilación**. De ahí `build_runner`, que ejecuta *builders* que leen tu código anotado y escriben ficheros `.g.dart`.\n\nCasos habituales: `json_serializable` (serialización), `freezed` (clases inmutables con copyWith y unions), `drift` (consultas tipadas), `mockito` (mocks), `riverpod_generator`.\n\nLo que hay que saber en la práctica:\n- Los ficheros generados **se regeneran**, no se editan. Suelen ir en `.gitignore`, aunque commitearlos acelera el CI.\n- `--delete-conflicting-outputs` resuelve la mayoría de los atascos en versiones antiguas; en las recientes ya no hace falta.\n- El **tiempo de build** es el coste real: en proyectos grandes, la generación se convierte en un cuello de botella del ciclo de desarrollo, y merece la pena limitar los builders por paquete.\n\nEl intercambio de fondo: pagas tiempo de compilación y ruido de ficheros para conseguir binarios pequeños, rápidos y con tree shaking agresivo.",
+      "rubric": {
+        "junior": "Sabe ejecutar build_runner y para qué sirven los ficheros .g.dart.",
+        "mid": "Entiende que Dart no tiene reflexión en AOT y por eso genera código, y conoce los generadores habituales.",
+        "senior": "Explica el intercambio entre reflexión y tree shaking, gestiona el tiempo de build como problema de productividad del equipo, y decide conscientemente si commitear los ficheros generados según el coste de CI."
+      },
+      "followUps": [
+        "¿Por qué no existe dart:mirrors en Flutter?",
+        "¿Commitearías los ficheros .g.dart?"
+      ]
+    },
+    {
+      "id": "dart-q030",
+      "level": "mid",
+      "topic": "Sistema de tipos",
+      "tags": [
+        "callable",
+        "operadores"
+      ],
+      "prompt": "¿Qué son las callable classes y la sobrecarga de operadores?",
+      "answer": "**Callable class**: una clase que define `call()` puede invocarse como si fuera una función.\n\n```dart\nclass Validator {\n  const Validator(this.pattern);\n  final RegExp pattern;\n  bool call(String input) => pattern.hasMatch(input);\n}\n\nfinal isEmail = Validator(RegExp(r'@'));\nisEmail('a@b.com');  // se llama como una función\n```\n\nLa utilidad: un objeto que se comporta como función pero **tiene estado y configuración**, y puede pasarse donde se espera una función. Es el patrón de los casos de uso en arquitecturas por capas (`GetUserUseCase()(id)`), aunque muchos prefieren un método con nombre por legibilidad.\n\n**Sobrecarga de operadores**: se pueden redefinir `+`, `-`, `*`, `[]`, `[]=`, `==`, `<`, `>`, `~/`, `%` y varios más. No se pueden sobrecargar `=`, `&&`, `||` ni `?:`.\n\n```dart\nclass Money {\n  const Money(this.cents);\n  final int cents;\n  Money operator +(Money other) => Money(cents + other.cents);\n  bool operator <(Money other) => cents < other.cents;\n}\n```\n\nEl criterio es el mismo en todos los lenguajes que lo permiten: sobrecarga un operador **solo si su significado es obvio e inequívoco** en tu dominio. Sumar dinero o vectores, sí. Un `+` que en realidad guarda en base de datos es una trampa para quien lea el código.",
+      "rubric": {
+        "junior": "Conoce la sobrecarga de operadores básicos.",
+        "mid": "Sabe qué es una callable class y da un caso de uso razonable.",
+        "senior": "Aplica el criterio de significado obvio para decidir si sobrecargar, y sitúa las callable classes en su contexto (casos de uso, validadores) reconociendo que un método con nombre suele ser más legible para el equipo."
+      },
+      "followUps": [
+        "¿Qué operadores NO se pueden sobrecargar?",
+        "¿Cuándo es mala idea sobrecargar un operador?"
+      ]
+    },
+    {
+      "id": "dart-q031",
+      "level": "mid",
+      "topic": "Asincronía",
+      "tags": [
+        "zonas"
+      ],
+      "prompt": "¿Qué es una Zone en Dart?",
+      "answer": "Una `Zone` es un **contexto de ejecución** que envuelve código asíncrono y puede interceptar sus operaciones: errores no capturados, creación de timers, microtasks, e incluso `print`.\n\nEl uso principal es capturar errores asíncronos que de otro modo se perderían:\n\n```dart\nrunZonedGuarded(() {\n  runApp(const MyApp());\n}, (error, stackTrace) {\n  crashReporter.record(error, stackTrace);\n});\n```\n\nLo interesante es que la zona **se propaga por las cadenas asíncronas**: un error lanzado dentro de un `Future` creado tres niveles más abajo llega igualmente al manejador, porque el future recuerda en qué zona nació.\n\nTambién soporta valores asociados (`Zone.current[#key]`), lo que permite un *request context* implícito sin pasarlo por parámetro. Es potente y, por lo mismo, fácil de convertir en estado global disfrazado.\n\nEn Flutter moderno, para la captura de errores conviene `PlatformDispatcher.instance.onError`, que es más simple y cubre el caso habitual. Las zonas siguen siendo útiles para inyectar un reloj o un `print` falsos en tests, y para instrumentación.\n\nAviso práctico: mezclar `runZonedGuarded` con la inicialización de Flutter en zonas distintas produce el error \"Zone mismatch\", que confunde a mucha gente.",
+      "rubric": {
+        "junior": "Ha visto runZonedGuarded para capturar errores.",
+        "mid": "Entiende que la zona se propaga por las cadenas asíncronas y captura errores no manejados.",
+        "senior": "Conoce la intercepción de timers, microtasks y print y su uso en tests e instrumentación; advierte del riesgo de usar valores de zona como estado global implícito, y sabe que hoy PlatformDispatcher.onError cubre mejor el caso común en Flutter."
+      },
+      "followUps": [
+        "¿Qué es el error de 'Zone mismatch'?",
+        "¿Cómo inyectarías un reloj falso con zonas?"
+      ]
+    },
+    {
+      "id": "dart-q032",
+      "level": "mid",
+      "topic": "Interoperabilidad",
+      "tags": [
+        "ffi"
+      ],
+      "prompt": "¿Qué es dart:ffi y cuándo lo usarías?",
+      "answer": "`dart:ffi` (Foreign Function Interface) permite llamar a funciones de bibliotecas nativas en C directamente desde Dart, **sin pasar por platform channels**.\n\nLa diferencia de coste es grande: un platform channel serializa el mensaje, lo pasa por el `BinaryMessenger` y es asíncrono. Una llamada FFI es esencialmente una llamada a función: síncrona y con sobrecarga mínima.\n\nCuándo compensa:\n- Reutilizar una biblioteca C/C++ existente (SQLite, OpenCV, libsodium, un códec).\n- Cálculo intensivo donde el coste por llamada importa.\n- Acceso a APIs del sistema que no expone ningún plugin.\n\nQué hay que asumir:\n- **Gestión de memoria manual**: `malloc`/`free` a través de `package:ffi`. El GC de Dart no sabe nada de esa memoria. Una fuga aquí es una fuga de verdad, y un puntero mal usado es un crash nativo sin traza de Dart.\n- **Marshalling de tipos**: structs, punteros, cadenas terminadas en cero. `package:ffigen` genera los bindings a partir de las cabeceras C y ahorra la mayor parte de los errores.\n- **Distribución**: hay que compilar y empaquetar la biblioteca nativa para cada plataforma y arquitectura, lo que complica el build.\n- Los **callbacks de nativo a Dart** tienen restricciones de isolate que hay que estudiar antes de diseñar la integración.\n\nRegla: si existe un plugin mantenido que hace lo que necesitas, úsalo. FFI es para cuando no lo hay o el rendimiento lo exige.",
+      "rubric": {
+        "junior": "Sabe que permite llamar a código C.",
+        "mid": "Compara con platform channels en coste y sincronía, y conoce ffigen.",
+        "senior": "Asume la gestión manual de memoria y sus riesgos, contempla el coste de compilar y distribuir binarios por plataforma, y decide entre plugin y FFI en función de mantenimiento y rendimiento medido."
+      },
+      "followUps": [
+        "¿Quién libera la memoria reservada con malloc desde Dart?",
+        "¿Qué aporta ffigen?"
+      ]
+    },
+    {
+      "id": "dart-q033",
+      "level": "mid",
+      "topic": "Herramientas",
+      "tags": [
+        "paquetes",
+        "publicacion"
+      ],
+      "prompt": "¿Cómo se estructura y publica un paquete en pub.dev?",
+      "answer": "Estructura convencional:\n\n```\nmi_paquete/\n  lib/\n    mi_paquete.dart      # el único punto de entrada público\n    src/                 # implementación: privado por convención\n  test/\n  example/\n  CHANGELOG.md\n  README.md\n  LICENSE\n  pubspec.yaml\n```\n\nLa convención importante es `lib/src/`: **todo lo que está ahí se considera privado**, aunque técnicamente sea importable. El fichero de entrada exporta solo lo que forma la API pública. Eso te deja libertad para refactorizar `src/` sin romper a nadie.\n\nPara publicar: `dart pub publish --dry-run` primero, que valida todo. La puntuación de pub.dev premia documentación (comentarios `///` en la API pública), ejemplo, soporte de plataformas declarado, análisis estático limpio y null safety.\n\nLo que más se descuida y más cuesta después:\n- **El `CHANGELOG.md`** con versionado semántico honesto. Marcar como *minor* algo que rompe la API es la forma más rápida de perder la confianza de tus usuarios.\n- **La restricción de SDK** en `pubspec.yaml`: si es demasiado estrecha, impides que te usen; demasiado ancha, prometes compatibilidad que no has probado.\n- **Las dependencias**: cada una que añadas la heredan todos tus usuarios.\n\nY una vez publicada una versión, **no se puede borrar** (solo retirar). Conviene probar con `--dry-run` y con un `example/` real.",
+      "rubric": {
+        "junior": "Conoce la estructura básica y el comando de publicación.",
+        "mid": "Usa lib/src para la implementación privada, documenta la API pública y mantiene el CHANGELOG.",
+        "senior": "Trata la API pública como un contrato: versionado semántico honesto, restricciones de SDK meditadas, minimización de dependencias transitivas, y consciencia de que publicar es irreversible."
+      },
+      "followUps": [
+        "¿Por qué lib/src se considera privado?",
+        "¿Qué implica una versión mayor en semver?"
+      ]
+    },
+    {
+      "id": "dart-q034",
+      "level": "mid",
+      "topic": "Rendimiento",
+      "tags": [
+        "rendimiento",
+        "colecciones"
+      ],
+      "prompt": "Este código va lento con 100.000 elementos. ¿Qué está mal?\n\n```dart\nfinal resultado = <Item>[];\nfor (final id in ids) {\n  final item = todos.firstWhere((i) => i.id == id);\n  if (!resultado.contains(item)) resultado.add(item);\n}\n```",
+      "answer": "Hay **dos** operaciones O(n) dentro de un bucle, así que el algoritmo es O(n²) y con 100.000 elementos son del orden de 10.000 millones de comparaciones.\n\n1. `firstWhere` recorre `todos` **entero** en cada iteración, hasta encontrar la coincidencia.\n2. `resultado.contains(item)` recorre la lista acumulada en cada iteración, y esa lista crece.\n\nLa corrección es cambiar las estructuras de datos, no micro-optimizar el bucle:\n\n- Indexar `todos` en un `Map<String, Item>` **una sola vez**: la búsqueda pasa a O(1).\n- Usar un `Set` para la deduplicación: `contains` pasa a O(1).\n\nEl resultado es O(n) en total.\n\n```dart\nfinal porId = {for (final item in todos) item.id: item};\nfinal vistos = <String>{};\nfinal resultado = <Item>[];\nfor (final id in ids) {\n  if (!vistos.add(id)) continue;      // add devuelve false si ya estaba\n  final item = porId[id];\n  if (item != null) resultado.add(item);\n}\n```\n\nDos detalles del arreglo: `vistos.add()` hace la comprobación y la inserción en una sola operación, y deduplicar por `id` en lugar de por objeto evita depender de que `Item` tenga `==` y `hashCode` bien implementados.\n\nAdemás, `firstWhere` sin `orElse` **lanza** si no encuentra nada: el código original también tenía un bug latente.",
+      "rubric": {
+        "junior": "Detecta que hay bucles anidados y que va a ser lento.",
+        "mid": "Identifica las dos operaciones O(n) y propone Map y Set para bajar a O(n).",
+        "senior": "Razona la complejidad total, señala el bug latente de firstWhere sin orElse, prefiere deduplicar por clave en vez de por objeto para no depender de ==/hashCode, y aprovecha el valor de retorno de Set.add."
+      },
+      "followUps": [
+        "¿Qué devuelve Set.add y por qué es útil?",
+        "¿Qué pasa si firstWhere no encuentra nada?"
+      ]
+    },
+    {
+      "id": "dart-q035",
+      "level": "senior",
+      "topic": "Compilación",
+      "tags": [
+        "jit",
+        "aot"
+      ],
+      "prompt": "¿Cómo se compila Dart y qué implica JIT frente a AOT?",
+      "answer": "Dart tiene varios backends y esa flexibilidad es una de sus decisiones de diseño centrales:\n\n- **JIT** (desarrollo): la VM interpreta y compila en caliente, optimizando con información de tipos observada en ejecución. Permite **hot reload**, que es posible precisamente porque se puede reemplazar el cuerpo de un método en la VM viva.\n- **AOT** (producción nativa): todo se compila a código máquina antes de ejecutar. Arranque instantáneo (no hay calentamiento), rendimiento predecible, binario cerrado. El precio: nada de reflexión ni de carga dinámica de código.\n- **dart2js** y **dart2wasm** (web): JavaScript o WebAssembly.\n\nDos consecuencias que hay que tener presentes:\n\n**El tree shaking solo es posible gracias a la ausencia de reflexión.** Si cualquier símbolo pudiera invocarse por nombre en runtime, el compilador no podría demostrar que nada es inalcanzable y no podría eliminar código. Por eso `dart:mirrors` no existe en AOT, y por eso Dart depende de la generación de código.\n\n**El comportamiento puede diferir entre modos.** El caso clásico es en web: `int` se representa como double de JavaScript, así que los enteros de 64 bits no se comportan igual que en nativo. Un bug que solo aparece en web compilado suele venir de ahí.",
+      "rubric": {
+        "junior": "Sabe que hay modo debug y release y que uno permite hot reload.",
+        "mid": "Explica JIT y AOT con sus ventajas, y sabe que en release no hay hot reload.",
+        "senior": "Conecta la ausencia de reflexión con la viabilidad del tree shaking y con la dependencia de codegen, y conoce las diferencias de semántica numérica en los backends web como fuente real de bugs específicos de plataforma."
+      },
+      "followUps": [
+        "¿Por qué el tree shaking necesita que no haya reflexión?",
+        "¿Por qué los enteros se comportan distinto en web?"
+      ]
+    },
+    {
+      "id": "dart-q036",
+      "level": "senior",
+      "topic": "Runtime",
+      "tags": [
+        "memoria",
+        "gc"
+      ],
+      "prompt": "¿Cómo funciona el recolector de basura de Dart?",
+      "answer": "Dart usa un GC **generacional**, diseñado en torno a la observación de que la mayoría de los objetos mueren jóvenes:\n\n- **Young space (scavenger)**: los objetos nuevos se asignan aquí, y la asignación es un simple incremento de puntero (muy barata). La recolección usa copia semiespacial: se copian los **supervivientes** al otro semiespacio y el resto se descarta de golpe. El coste es proporcional a lo que sobrevive, no a lo que muere. Por eso crear muchos objetos efímeros es sorprendentemente barato en Dart.\n- **Old space (mark-sweep / mark-compact)**: los objetos que sobreviven a varias recolecciones jóvenes se promocionan aquí. Se recolecta con marcado y barrido, en gran parte **concurrente** con la ejecución para no provocar pausas largas.\n\nCada isolate tiene **su propio heap y su propio GC**, así que una recolección en un isolate no detiene a los demás. Eso es una ventaja notable frente a un GC global.\n\nQué significa esto en la práctica:\n- La presión de GC viene sobre todo de objetos que **sobreviven** más de lo necesario, no del número total de asignaciones.\n- Widgets `const` ayudan porque se canonizan y no se asignan en cada build.\n- Una caché sin límite es el patrón que más daño hace: promociona objetos a old space y los mantiene vivos.\n\nDiagnóstico: DevTools → Memory, comparando snapshots y usando el **path to root** para ver quién retiene qué.",
+      "rubric": {
+        "junior": "Sabe que hay recolección automática de memoria.",
+        "mid": "Conoce el modelo generacional y que los objetos jóvenes se recolectan barato.",
+        "senior": "Explica por qué el coste del scavenger es proporcional a los supervivientes y qué implica para el diseño, relaciona las cachés sin límite con la promoción a old space, y sabe que cada isolate tiene su heap independiente."
+      },
+      "followUps": [
+        "¿Por qué crear objetos efímeros es barato?",
+        "¿Qué patrón de código genera más presión de GC?"
+      ]
+    },
+    {
+      "id": "dart-q037",
+      "level": "senior",
+      "topic": "Sistema de tipos",
+      "tags": [
+        "tipos",
+        "solidez"
+      ],
+      "prompt": "¿Qué significa que el sistema de tipos de Dart sea \"sound\" y dónde hace concesiones?",
+      "answer": "**Sólido** significa que si el compilador dice que una expresión tiene tipo `T`, en tiempo de ejecución **siempre** será `T` (o un subtipo). No es una aproximación: es una garantía sobre la que el compilador puede optimizar, eliminando comprobaciones de tipo y de null en el código AOT.\n\nDonde Dart hace concesiones conscientes:\n\n1. **Genéricos covariantes.** `List<int>` es subtipo de `List<num>`, lo que no es sólido para escritura. Dart lo compensa con una comprobación en runtime: `(<int>[] as List<num>).add(1.5)` lanza. Eligieron ergonomía sobre pureza y pagan con un check.\n2. **`dynamic`.** Es una vía de escape explícita. Dentro de `dynamic` no hay garantías, y el error aparece en ejecución.\n3. **`!`** (null assertion) traslada la comprobación a runtime.\n4. **Parámetros `covariant`**, que permiten estrechar el tipo de un parámetro al sobrescribir, rompiendo la contravarianza que exigiría la teoría. También se cubre con un check.\n\nEl patrón común es revelador: en cada concesión, Dart **no renuncia a la garantía**, la traslada de compilación a ejecución. El programa nunca acaba con un valor del tipo equivocado en silencio; falla ruidosamente.\n\nComparación útil: el sistema de TypeScript es deliberadamente **no** sólido (el tipado se borra y no hay checks en runtime), lo que permite más flexibilidad a cambio de que un error de tipos pueda propagarse sin ruido.",
+      "rubric": {
+        "junior": "Dice que el compilador comprueba los tipos.",
+        "mid": "Explica la garantía de solidez y nombra dynamic y ! como vías de escape.",
+        "senior": "Enumera las concesiones concretas (covarianza de genéricos, covariant en parámetros) y detecta el patrón de fondo: la garantía se traslada a runtime en vez de abandonarse. Compara con sistemas no sólidos como el de TypeScript."
+      },
+      "followUps": [
+        "¿Por qué TypeScript no es sound y qué gana con ello?",
+        "¿Qué optimizaciones permite la solidez al compilador AOT?"
+      ]
+    },
+    {
+      "id": "dart-q038",
+      "level": "senior",
+      "topic": "Concurrencia",
+      "tags": [
+        "isolates",
+        "arquitectura"
+      ],
+      "prompt": "Diseña un pool de isolates para procesar tareas en paralelo. ¿Qué problemas aparecen?",
+      "answer": "La estructura: N isolates persistentes, cada uno con su `ReceivePort`, y un coordinador en el isolate principal que reparte trabajo y recoge resultados.\n\nEl **handshake inicial** es lo primero que hay que resolver: `Isolate.spawn` recibe un `SendPort` del padre, y lo primero que hace el hijo es devolver el suyo. Hasta ese intercambio no hay canal bidireccional.\n\nProblemas reales, por orden de importancia:\n\n1. **El coste de la copia domina.** Los mensajes se serializan. Si tus tareas manejan datos grandes, la copia puede costar más que el cálculo y el pool sale perdiendo. Mitigaciones: `TransferableTypedData` para bytes (se transfiere sin copiar, cediendo la propiedad), o rediseñar para que el isolate **lea el dato él mismo** (del disco, de la red) en vez de recibirlo.\n\n2. **Dimensionar el pool.** Más isolates que núcleos no acelera nada y multiplica el uso de memoria, porque cada uno tiene su heap. `Platform.numberOfProcessors` como techo, y menos en móvil, donde hay que dejar el hilo de UI respirar.\n\n3. **Propagar errores.** Una excepción en el hijo no llega sola. Hay que registrar `onError` y `onExit` en el spawn, o una tarea que falle deja al llamador esperando para siempre.\n\n4. **Ciclo de vida.** Hay que matar los isolates (`Isolate.kill`) al terminar. Un pool que no se cierra es una fuga de recursos del sistema, no solo de memoria.\n\n5. **Cancelación.** No hay forma limpia de interrumpir una tarea en curso: solo matar el isolate. Si las tareas son largas y cancelables, hay que trocearlas y comprobar un flag entre trozos.\n\n6. **Contrapresión.** Sin un límite en la cola de entrada, un productor rápido acumula tareas en memoria hasta agotarla.\n\nY la pregunta previa: ¿lo necesitas? Para tareas puntuales, `Isolate.run()` es mucho más simple y ya reutiliza parte de la infraestructura. Un pool solo compensa con volumen sostenido.",
+      "rubric": {
+        "junior": "Sabe crear un isolate con spawn y enviar mensajes.",
+        "mid": "Monta el handshake de puertos, dimensiona el pool y gestiona errores.",
+        "senior": "Identifica el coste de serialización como el factor que decide si el pool compensa, resuelve cancelación y contrapresión, gestiona el ciclo de vida completo, y cuestiona la necesidad del pool frente a Isolate.run."
+      },
+      "followUps": [
+        "¿Cómo cancelas una tarea ya lanzada en un isolate?",
+        "¿Cuándo un pool sale más caro que no tenerlo?"
+      ]
+    },
+    {
+      "id": "dart-q039",
+      "level": "senior",
+      "topic": "Rendimiento",
+      "tags": [
+        "perfilado",
+        "optimizacion"
+      ],
+      "prompt": "¿Cómo perfilas y optimizas código Dart puro?",
+      "answer": "El orden importa más que las técnicas:\n\n**1. Medir antes de tocar.** `dart run --observe` abre el Observatory/DevTools; el **CPU profiler** con su gráfico de llamas dice dónde se va el tiempo de verdad. La intuición sobre rendimiento es notoriamente mala, y optimizar el 2% del tiempo de ejecución no sirve de nada aunque el código quede más bonito.\n\n**2. Benchmark reproducible.** `package:benchmark_harness` para micro-benchmarks. Cuidado con dos trampas clásicas: medir en JIT sin calentamiento (los primeros ciclos son lentísimos) y que el compilador elimine el código que mides porque su resultado no se usa.\n\n**3. Atacar primero el algoritmo.** Cambiar O(n²) por O(n) con la estructura de datos adecuada gana órdenes de magnitud; las micro-optimizaciones ganan porcentajes. En la práctica, la mayoría de los problemas de rendimiento en Dart son un `contains` o un `firstWhere` dentro de un bucle.\n\n**4. Después, las asignaciones.** Reducir objetos temporales en rutas calientes, reutilizar buffers, usar `TypedData` (`Uint8List`, `Float64List`) en vez de `List<int>` para datos numéricos: son contiguos en memoria y evitan el boxing.\n\n**5. Ayudar al compilador.** Tipos concretos en lugar de `dynamic` permiten despacho estático en vez de dinámico. Los sitios de llamada monomórficos (que siempre reciben el mismo tipo) se optimizan mucho mejor que los polimórficos.\n\n**6. Y siempre medir en AOT**, no en JIT: son compiladores distintos con perfiles distintos, y lo que mejora en uno puede no mejorar en el otro.",
+      "rubric": {
+        "junior": "Usa cronómetros manuales para medir tiempos.",
+        "mid": "Usa el CPU profiler de DevTools y benchmark_harness, y prioriza el algoritmo.",
+        "senior": "Ordena el trabajo por impacto, conoce las trampas del micro-benchmarking (calentamiento, eliminación de código muerto), aprovecha TypedData y el despacho monomórfico, y mide en el modo de compilación en que se va a ejecutar."
+      },
+      "followUps": [
+        "¿Qué es un sitio de llamada monomórfico?",
+        "¿Por qué medir en JIT puede engañarte?"
+      ]
+    },
+    {
+      "id": "dart-q040",
+      "level": "senior",
+      "topic": "Diseño de API",
+      "tags": [
+        "api",
+        "compatibilidad"
+      ],
+      "prompt": "¿Cómo diseñas una API pública que puedas evolucionar sin romper a tus usuarios?",
+      "answer": "El principio: **lo que expones es un contrato que tendrás que sostener durante años**. Todo lo que no expones es libertad futura.\n\nDecisiones concretas:\n\n- **Superficie mínima.** Todo en `lib/src/` y exporta explícitamente lo mínimo viable. Es fácil añadir después; quitar es un cambio mayor.\n- **Parámetros nombrados** en vez de posicionales: permiten añadir opciones sin romper llamadas existentes y sin ambigüedad de orden.\n- **Evita exponer jerarquías extensibles** salvo que sea intencionado. Si alguien puede heredar de tu clase, añadir un método es un cambio que rompe. Los **modificadores de clase de Dart 3** hacen esto explícito: `final class` (nadie hereda), `interface class` (solo implements), `base class` (solo extends), `sealed` (conjunto cerrado). Elegirlos conscientemente es una de las mejores herramientas del lenguaje para esto.\n- **No expongas tipos de terceros** en tu API pública. Si devuelves un tipo de otro paquete, has acoplado tus usuarios a la versión de ese paquete, y una actualización suya rompe la tuya.\n- **Enums y sealed classes** cierran el conjunto de valores: añadir una variante rompe los switches exhaustivos de tus usuarios. Es un cambio mayor, no menor. Hay que decidirlo de antemano.\n- **Deprecar antes de eliminar**: `@Deprecated('Usa X. Se eliminará en 3.0.0')`, mantener al menos una versión mayor, y documentar la migración en el CHANGELOG.\n\nY la comprobación que resuelve la mayoría de las dudas: **escribe el código de ejemplo primero**, como si fueras el usuario. Si la llamada resulta incómoda de escribir, el diseño está mal, por elegante que sea la implementación.",
+      "rubric": {
+        "junior": "Sabe que hay que documentar y no cambiar firmas existentes.",
+        "mid": "Minimiza la superficie pública, usa parámetros nombrados y deprecación progresiva.",
+        "senior": "Usa los modificadores de clase de Dart 3 como decisión de diseño de contrato, evita filtrar tipos de terceros, entiende que añadir una variante a un enum público es un cambio mayor, y valida el diseño escribiendo primero el código de uso."
+      },
+      "followUps": [
+        "¿Por qué añadir un valor a un enum público es breaking?",
+        "¿Qué problema hay en devolver un tipo de otro paquete?"
+      ]
+    },
+    {
+      "id": "dart-q041",
+      "level": "senior",
+      "topic": "Interoperabilidad",
+      "tags": [
+        "web",
+        "js"
+      ],
+      "prompt": "¿Cómo interopera Dart con JavaScript y qué cambia con WebAssembly?",
+      "answer": "La interoperabilidad con JS se ha reescrito: el camino actual es **`dart:js_interop`** con **extension types**, que sustituye al antiguo `package:js` y a `dart:html`.\n\nLos **extension types** son la pieza clave: envuelven un objeto JS con una interfaz Dart tipada **sin coste en tiempo de ejecución** (no hay objeto envolvente, se borran en compilación). Declaras la forma que esperas del objeto JS y programas contra tipos, no contra `dynamic`.\n\nLo que cambia con **dart2wasm** y por qué se hizo la reescritura: al compilar a WebAssembly, Dart ya **no se ejecuta dentro del runtime de JavaScript**. Cruzar a JS pasa a ser una frontera real con su propio marshalling, no un acceso directo. Las viejas APIs de interop asumían que Dart *era* JavaScript y no podían funcionar así. Por eso se introdujeron tipos explícitos (`JSString`, `JSNumber`, `JSObject`, `JSAny`) y conversiones explícitas (`.toJS`, `.toDart`).\n\nQué implica en la práctica:\n- **`dart:html` está obsoleto**; el acceso al DOM va por `package:web`.\n- El coste de cruzar la frontera deja de ser despreciable en WASM: llamar a JS en un bucle apretado importa.\n- Hay que ser explícito con las conversiones, lo que es más verboso pero elimina una clase entera de errores silenciosos.\n\nY la ganancia: dart2wasm ofrece rendimiento más predecible que dart2js, porque no depende de las heurísticas del JIT del navegador.",
+      "rubric": {
+        "junior": "Sabe que se puede llamar a JavaScript desde Dart.",
+        "mid": "Conoce dart:js_interop y que dart:html está obsoleto en favor de package:web.",
+        "senior": "Explica por qué WASM obligó a rediseñar la interop (Dart deja de ejecutarse en el runtime de JS), entiende los extension types como envoltorio sin coste, y considera el coste de cruzar la frontera en código caliente."
+      },
+      "followUps": [
+        "¿Qué es un extension type y por qué no tiene coste?",
+        "¿Qué ventaja da dart2wasm sobre dart2js?"
+      ]
+    },
+    {
+      "id": "dart-q042",
+      "level": "senior",
+      "topic": "Arquitectura",
+      "tags": [
+        "monorepo",
+        "escala"
+      ],
+      "prompt": "¿Cómo organizas un monorepo Dart con muchos paquetes?",
+      "answer": "Herramientas: **pub workspaces** (soporte nativo desde Dart 3.6: una única resolución de dependencias y un solo `pubspec.lock` para todo el repositorio) y **melos**, que además orquesta comandos, versionado y publicación coordinada.\n\nEstructura por responsabilidad, no por capa técnica:\n\n```\npackages/\n  core_utils/       # sin dependencias de dominio\n  core_network/\n  domain_billing/   # entidades y reglas, Dart puro\n  data_billing/\n  feature_billing/  # UI\napps/\n  mobile/\n  admin/\n```\n\nLo que hace que funcione de verdad:\n\n- **Las dependencias del `pubspec.yaml` de cada paquete son la arquitectura.** No es una convención que alguien tiene que recordar en la revisión: es una barrera que el compilador impone. Si `domain_billing` no declara `flutter` como dependencia, es literalmente imposible importar un widget ahí.\n- **CI incremental**: solo construir y probar lo afectado por el cambio. Sin esto, el monorepo se vuelve insoportable en cuanto crece.\n- **Versionado**: independiente por paquete (más preciso, más trabajo) o fijado en lote (más simple, publicas cosas que no cambiaron). Melos soporta ambos; hay que elegir conscientemente.\n- **`CODEOWNERS` alineado con los paquetes**, para que las revisiones lleguen a quien corresponde.\n\nLos problemas que aparecen y hay que anticipar: tiempos de CI crecientes, dependencias circulares entre paquetes (que pub rechaza, y menos mal), y **límites mal trazados al principio**. Sobre esto último: los límites correctos se descubren observando qué ficheros cambian juntos en el historial, no dibujando un diagrama antes de escribir nada.",
+      "rubric": {
+        "junior": "Sabe que se pueden tener varios paquetes con dependencias por path.",
+        "mid": "Usa melos o workspaces y separa core, domain, data y features.",
+        "senior": "Trata las dependencias declaradas como barrera verificada por el compilador en vez de por disciplina, monta CI incremental, elige estrategia de versionado conscientemente, y advierte contra trazar límites antes de tener evidencia."
+      },
+      "followUps": [
+        "¿Cómo impides que la capa de dominio importe Flutter?",
+        "¿Versionado independiente o en lote?"
+      ]
+    },
+    {
+      "id": "dart-q043",
+      "level": "senior",
+      "topic": "Calidad",
+      "tags": [
+        "deuda tecnica",
+        "refactor"
+      ],
+      "prompt": "Heredas 80.000 líneas de Dart sin tests y con lógica en la UI. ¿Por dónde empiezas?",
+      "answer": "La respuesta que descarta a un candidato es \"lo reescribo\". Una reescritura de un sistema en producción es el proyecto con peor historial de éxito del oficio: tarda el doble de lo previsto, durante ese tiempo no se entregan funcionalidades, y se reintroducen bugs que el sistema viejo ya había resuelto (todos esos `if` raros suelen ser casos reales que alguien encontró).\n\nPlan:\n\n**1. Estabilizar antes de mejorar.** Lo primero no es refactorizar: es **ver**. Crash reporting, logs estructurados, métricas de las rutas críticas. Sin observabilidad, cualquier cambio es a ciegas y no sabrás si empeoraste algo.\n\n**2. Red de seguridad en el perímetro.** No tests unitarios del código malo (que cambiará), sino unos pocos **tests de extremo a extremo de los flujos que generan dinero**. Son la red que te permite tocar cosas.\n\n**3. Refactor oportunista, no campaña.** La regla del campamento: cada vez que toques un fichero por una tarea real, déjalo algo mejor. Una campaña de refactor de tres meses sin entregar valor es política y presupuestariamente insostenible, y se cancela a mitad dejando dos arquitecturas conviviendo, que es peor que la situación inicial.\n\n**4. Estrangular por los bordes.** Patrón *strangler fig*: la funcionalidad nueva se escribe con la arquitectura buena; lo viejo se va sustituyendo cuando hay que tocarlo. El sistema nuevo crece alrededor del viejo hasta reemplazarlo.\n\n**5. Empezar por el dominio.** Extraer lógica de negocio de los widgets a Dart puro es el refactor con mejor relación valor/riesgo: es mecánico, no cambia comportamiento, y cada trozo extraído se vuelve testeable de inmediato.\n\n**6. Automatizar lo automatizable.** Lints estrictos activados de forma incremental (por carpeta, no de golpe), formato en CI, y prohibir que la deuda crezca en código nuevo.\n\nY lo que hay que hacer desde el primer día: **medir y comunicar**. Cobertura, número de incidencias, tiempo de entrega. Sin números, \"estamos mejorando la calidad\" suena a excusa para no entregar, y el permiso para seguir se acaba.",
+      "rubric": {
+        "junior": "Propone añadir tests y refactorizar.",
+        "mid": "Prioriza lo crítico, añade tests antes de tocar y refactoriza gradualmente.",
+        "senior": "Descarta la reescritura con argumentos, empieza por observabilidad, aplica strangler fig y la regla del campamento, elige el refactor de mejor relación valor/riesgo, y trata la comunicación con números como parte del trabajo técnico."
+      },
+      "followUps": [
+        "¿Por qué fracasan las reescrituras completas?",
+        "¿Cómo justificas ante negocio el tiempo dedicado a esto?"
+      ]
+    },
+    {
+      "id": "dart-q044",
+      "level": "senior",
+      "topic": "Seguridad",
+      "tags": [
+        "seguridad",
+        "dependencias"
+      ],
+      "prompt": "¿Qué riesgos de seguridad tiene la cadena de dependencias de Dart y cómo los gestionas?",
+      "answer": "El riesgo de fondo: **una dependencia ejecuta código con tus privilegios**, tanto en el build (los builders de `build_runner` ejecutan código arbitrario durante la compilación) como en la app.\n\nVectores concretos:\n- **Typosquatting**: un paquete con nombre parecido a uno popular.\n- **Toma de control de un paquete**: la cuenta del mantenedor se compromete y se publica una versión maliciosa.\n- **Dependencias transitivas**: no auditas 3 paquetes, auditas los 40 que arrastran.\n- **Dependencias de git apuntando a una rama**: el contenido puede cambiar bajo tus pies sin que cambie tu `pubspec.yaml`.\n\nMitigaciones prácticas:\n1. **Commitear `pubspec.lock`** en aplicaciones: fija las versiones exactas y hace el build reproducible y auditable.\n2. **Fijar commits, no ramas**, en dependencias de git.\n3. **Revisar el diff de las actualizaciones** de dependencias críticas en vez de aceptar en bloque. Renovate o Dependabot con revisión humana, no con automerge.\n4. **`dart pub deps`** para ver el árbol completo, y minimizar conscientemente el número de dependencias directas: cada una multiplica la superficie.\n5. **Builds en CI aislado**, sin credenciales de producción disponibles durante la compilación.\n6. **Verificación de publicación**: pub.dev soporta publicar desde GitHub Actions con OIDC, sin credenciales de larga vida que puedan filtrarse.\n\nY en el producto: nada de secretos en el binario (el cliente es territorio del atacante), credenciales en el almacén seguro de la plataforma, y `--obfuscate` entendido como lo que es, un aumento del coste del análisis, no una protección.",
+      "rubric": {
+        "junior": "Dice que hay que usar paquetes conocidos y mantenidos.",
+        "mid": "Commitea el lock, fija versiones y revisa las actualizaciones.",
+        "senior": "Trata la cadena de suministro como superficie de ataque real, incluye el tiempo de build como vector (los builders ejecutan código), y aplica medidas organizativas: revisión de diffs, CI aislado, publicación con OIDC."
+      },
+      "followUps": [
+        "¿Por qué el momento del build es un vector de ataque?",
+        "¿Qué aporta publicar con OIDC?"
+      ]
+    },
+    {
+      "id": "dart-q045",
+      "level": "senior",
+      "topic": "Runtime",
+      "tags": [
+        "const",
+        "canonizacion"
+      ],
+      "prompt": "Explica la canonización de constantes y sus efectos observables.",
+      "answer": "Una expresión `const` se evalúa **en tiempo de compilación** y el objeto resultante se **canoniza**: todas las apariciones con los mismos argumentos comparten una única instancia en el binario.\n\nEfecto observable directo:\n\n```dart\nidentical(const Point(1, 2), const Point(1, 2));  // true\nidentical(Point(1, 2), Point(1, 2));              // false\n```\n\nLas consecuencias:\n\n1. **Memoria**: una sola instancia, asignada en el binario y no en el heap. No genera presión de GC.\n2. **Comparación O(1)**: `identical` basta, no hace falta comparar campos. Flutter aprovecha exactamente esto en `Element.update` para saltarse subárboles enteros.\n3. **Requisitos estrictos**: todos los campos `final`, todos los argumentos constantes de compilación, sin cálculos en el constructor. Por eso `const Duration(seconds: 2)` funciona y `const Duration(seconds: x)` no.\n4. **Const anidado**: dentro de un contexto const, el `const` de los hijos es implícito. `const [Point(1,2)]` ya crea el punto como constante.\n\nY un detalle que muerde: la canonización es **por librería y por argumentos**, así que dos objetos const idénticos definidos en contextos distintos pueden no serlo si los tipos genéricos difieren. Depender de `identical` para lógica de negocio es frágil; es una optimización del compilador, no un contrato semántico del que colgar comportamiento.",
+      "rubric": {
+        "junior": "Sabe que const es constante de compilación y que ayuda al rendimiento.",
+        "mid": "Explica que las instancias se comparten y que identical devuelve true.",
+        "senior": "Conecta la canonización con la optimización concreta de Flutter en Element.update, conoce los requisitos exactos y el const implícito anidado, y advierte de no construir lógica de negocio sobre identical porque es una optimización, no un contrato."
+      },
+      "followUps": [
+        "¿Cómo aprovecha Flutter la canonización?",
+        "¿Por qué const Duration(seconds: x) no compila?"
+      ]
+    },
+    {
+      "id": "dart-q046",
+      "level": "senior",
+      "topic": "Testing",
+      "tags": [
+        "testing",
+        "estrategia"
+      ],
+      "prompt": "¿Qué distingue una buena suite de tests de una que solo da cobertura?",
+      "answer": "La cobertura mide **qué líneas se ejecutan**, no si el test comprobaría algo al romperse. Un test sin un solo `expect` da 100% de cobertura y valor cero. Es una métrica útil para encontrar zonas **sin** tests, e inútil como objetivo.\n\nLo que distingue una buena suite:\n\n1. **Prueba comportamiento observable, no implementación.** Si renombrar un método privado rompe veinte tests, esos tests son un impuesto sobre el refactor, que es justo lo contrario de lo que deberían hacer. Síntoma claro: exceso de mocks con verificación de llamadas.\n\n2. **Falla por una razón, y la dice.** Un test que falla debería identificar el problema por su nombre y su mensaje, sin depurar. Nombres que describen el comportamiento (\"rechaza un email sin arroba\"), no el método (\"testValidate\").\n\n3. **Determinista.** Nada de tiempo real, nada de orden de ejecución, nada de estado compartido entre tests. Un test intermitente es peor que no tenerlo: entrena al equipo a ignorar los fallos rojos, y entonces el test que sí importa pasa desapercibido.\n\n4. **Rápida.** Si la suite tarda veinte minutos, la gente deja de ejecutarla en local y el ciclo de realimentación se rompe.\n\n5. **En la capa correcta.** Un bug de lógica de negocio debería cazarlo un unit test en milisegundos, no un test de integración en dos minutos. Cuando la única forma de probar algo es de extremo a extremo, casi siempre es un problema de diseño: la lógica está enredada con la infraestructura.\n\nLa métrica que de verdad informa es el **mutation testing**: introducir cambios pequeños en el código y ver si algún test se entera. Mide lo que la cobertura pretende medir y no mide.\n\nY una pregunta útil en revisiones: *¿qué bug real habría atrapado este test?* Si no hay respuesta, probablemente sobra.",
+      "rubric": {
+        "junior": "Dice que hay que tener buena cobertura y probar los casos principales.",
+        "mid": "Prueba comportamiento en vez de implementación, cuida el determinismo y la velocidad.",
+        "senior": "Critica la cobertura como objetivo, propone mutation testing, identifica los tests frágiles por exceso de mocks, y lee la dificultad de testear como señal de un problema de diseño."
+      },
+      "followUps": [
+        "¿Qué es mutation testing?",
+        "¿Qué te dice que un test sea difícil de escribir?"
+      ]
+    },
+    {
+      "id": "dart-q047",
+      "level": "senior",
+      "topic": "Runtime",
+      "tags": [
+        "event loop",
+        "jank"
+      ],
+      "prompt": "¿Cómo puede un microtask bloquear la aplicación entera?",
+      "answer": "Porque el event loop **vacía la cola de microtasks por completo** antes de tomar el siguiente evento de la event queue. No es \"procesa algunas y cede\": es \"hasta que esté vacía\".\n\nSi un microtask programa otro microtask, y ese otro, la cola nunca se vacía:\n\n```dart\nvoid bucle() {\n  scheduleMicrotask(bucle);   // se replanifica a sí mismo\n}\nbucle();  // la app se congela para siempre\n```\n\nLos eventos de la otra cola —el vsync que dispara el frame, la entrada táctil, la respuesta de red, los timers— **nunca llegan a ejecutarse**. La app no consume CPU en un bucle visible ni lanza ninguna excepción: simplemente deja de responder. Es de los cuelgues más difíciles de diagnosticar precisamente porque no hay ningún síntoma que apunte al culpable.\n\nVariantes menos evidentes y más frecuentes en código real:\n- Una cadena de `Future`s ya completados que se encadenan en bucle. `await` sobre un future resuelto pasa por la microtask queue, **no** por la event queue.\n- Procesar una colección grande con `await` en cada iteración cuando todos los futures ya están resueltos: se convierte en miles de microtasks seguidas sin ceder ni un frame.\n\nCómo ceder de verdad al event loop: `await Future.delayed(Duration.zero)` o `await Future(() {})`, que programan en la **event queue** y dejan pasar un frame. `await null` no sirve: se queda en microtasks.\n\nY la regla de diseño: para trocear trabajo largo, hay que ceder explícitamente cada N iteraciones; y si el trabajo es de CPU y no de espera, ni siquiera eso vale, hay que llevarlo a un isolate.",
+      "rubric": {
+        "junior": "Sabe que hay dos colas y que las microtasks tienen prioridad.",
+        "mid": "Explica que la cola de microtasks se vacía entera y que eso puede impedir que se rendericen frames.",
+        "senior": "Reconoce las variantes realistas (cadenas de futures ya resueltos), sabe que await sobre un future completado no cede al event loop, conoce la forma correcta de ceder, y distingue trocear trabajo de moverlo a un isolate."
+      },
+      "followUps": [
+        "¿Cómo cedes de verdad al event loop?",
+        "¿Por qué await null no cede?"
+      ]
+    },
+    {
+      "id": "dart-q048",
+      "level": "senior",
+      "topic": "Arquitectura",
+      "tags": [
+        "errores",
+        "modelado"
+      ],
+      "prompt": "¿Excepciones o un tipo Result? ¿Cómo modelas los errores en una base de código grande?",
+      "answer": "No es una elección única: son herramientas para **dos categorías distintas** de fallo, y confundirlas es el problema real.\n\n**Excepciones** para lo excepcional e irrecuperable: un bug (`StateError`, `ArgumentError`), una invariante rota, una condición que ningún llamador puede tratar de forma sensata. Deben propagarse hasta el manejador global, reportarse, y corregirse en código.\n\n**Result / sealed class** para los fallos **esperados del dominio**: credenciales incorrectas, sin conexión, validación fallida, recurso no encontrado. No son excepcionales: son resultados legítimos de la operación, y el llamador tiene algo concreto que hacer con ellos.\n\nLa ventaja decisiva del tipo `Result` es que **el error aparece en la firma**. Dart no tiene excepciones comprobadas: `Future<User> login()` no dice en ninguna parte que puede fallar, y el compilador no te obliga a tratarlo. Es información que solo existe en la documentación, si es que existe. Con `Future<Result<User, LoginError>>`, el fallo forma parte del tipo, el `switch` es exhaustivo, y añadir un caso de error nuevo **rompe la compilación** en todos los sitios que hay que actualizar. Eso es exactamente lo que quieres.\n\nEl coste, que hay que reconocer: más verbosidad, y sin azúcar sintáctico para propagar (no hay `?` de Rust ni `do-notation`), encadenar operaciones que pueden fallar es incómodo.\n\nRecomendación práctica para una base grande:\n- `Result` en los **límites entre capas** (repositorios, casos de uso), que es donde los errores cruzan y donde importa que estén declarados.\n- Excepciones **dentro** de una capa, para lo que es un bug.\n- **Una sola convención en todo el proyecto**, documentada. Lo peor es mezclar: código que a veces lanza y a veces devuelve, donde nadie sabe qué esperar y todo acaba envuelto en `try` defensivos.",
+      "rubric": {
+        "junior": "Usa try/catch en todas partes.",
+        "mid": "Distingue errores esperados de inesperados y conoce el patrón Result.",
+        "senior": "Argumenta desde la ausencia de excepciones comprobadas en Dart, valora que el error esté en el tipo y que añadir variantes rompa la compilación donde hace falta, reconoce el coste en verbosidad, y prioriza la consistencia de la convención sobre la elección concreta."
+      },
+      "followUps": [
+        "¿Qué pierdes al no tener excepciones comprobadas?",
+        "¿Qué problema hay en mezclar ambos enfoques?"
+      ]
+    },
+    {
+      "id": "dart-q049",
+      "level": "senior",
+      "topic": "Calidad",
+      "tags": [
+        "decisiones",
+        "criterio"
+      ],
+      "prompt": "¿Cómo tomas y documentas una decisión técnica importante?",
+      "answer": "El formato que funciona es un **ADR** (Architecture Decision Record): un documento corto, versionado junto al código, con cinco secciones.\n\n1. **Contexto**: qué problema real existe y qué restricciones hay (plazos, equipo, sistemas que no se pueden tocar). Sin esto, dentro de dos años nadie entenderá por qué se decidió así, y lo tacharán de error cuando quizá fue la decisión correcta con la información disponible.\n2. **Opciones consideradas**, con sus ventajas e inconvenientes. **Incluidas las descartadas y por qué.** Esta es la parte que más se omite y más valor tiene: evita que dentro de un año alguien reabra la discusión con la opción que ya se estudió y se rechazó.\n3. **Criterios de decisión**, explícitos y, si se puede, ponderados: coste de migración, familiaridad del equipo, madurez, coste de salida.\n4. **Decisión.**\n5. **Consecuencias**, positivas **y negativas**. Un ADR que solo enumera ventajas no es un análisis, es una justificación a posteriori. Toda decisión tiene coste, y nombrarlo es lo que demuestra que se entendió.\n\nDos cosas que separan a quien decide bien de quien decide rápido:\n\n**Decisiones reversibles e irreversibles no merecen el mismo proceso.** Elegir una librería de formato de fechas es reversible: decide en cinco minutos y sigue. Elegir el modelo de datos o la estrategia de sincronización offline es caro de deshacer: ahí sí invierte en prototipos y análisis. Tratar todo con el mismo rigor paraliza; tratarlo todo a la ligera hipoteca.\n\n**Fecha de revisión.** \"Revisamos esto en seis meses o si pasa X\". Una decisión tomada con la información de hoy puede dejar de ser correcta, y sin un disparador explícito nadie la vuelve a mirar: se convierte en dogma y luego en deuda.\n\nY una señal de madurez: cambiar de opinión cuando aparecen datos nuevos, sin tratarlo como una derrota personal.",
+      "rubric": {
+        "junior": "Consulta con el equipo y elige lo que mejor conoce.",
+        "mid": "Compara opciones con criterios y documenta la decisión.",
+        "senior": "Usa ADRs con consecuencias negativas explícitas, distingue decisiones reversibles de irreversibles para calibrar el esfuerzo, fija disparadores de revisión, y asume el cambio de opinión ante datos nuevos como parte del proceso."
+      },
+      "followUps": [
+        "¿Por qué documentar las opciones descartadas?",
+        "¿Cómo decides cuánto esfuerzo merece una decisión?"
+      ]
+    },
+    {
+      "id": "dart-q050",
+      "level": "senior",
+      "topic": "Calidad",
+      "tags": [
+        "equipo",
+        "estandares"
+      ],
+      "prompt": "¿Cómo estableces estándares de código en un equipo sin convertirte en un cuello de botella?",
+      "answer": "El principio: **si el estándar depende de que tú lo recuerdes en cada revisión, no es un estándar, es una preferencia tuya**. Y se pierde en cuanto te vas de vacaciones.\n\nLa jerarquía de eficacia, de mejor a peor:\n\n1. **Imposible de incumplir.** Lo mejor es que el mal camino ni exista. Si la capa de dominio no declara `flutter` como dependencia, nadie puede importar un widget ahí: no hay nada que recordar ni que revisar.\n2. **Automático.** Lints, formateo, comprobaciones en CI. Una regla de análisis discute mejor que una persona: es consistente, inmediata, y no genera fricción interpersonal. `custom_lint` permite escribir reglas propias del proyecto.\n3. **Plantillas y ejemplos.** La gente copia lo que ve. Un módulo de referencia bien hecho enseña más que un documento de veinte páginas, porque es lo que se abre cuando hay que escribir uno nuevo.\n4. **Documentado.** Un ADR o una guía, corta y localizable. Si no está escrito, no existe: es folclore que se transmite por casualidad.\n5. **Revisión humana.** El último recurso, reservado para lo que **no se puede** automatizar: diseño, nombres, si el problema resuelto es el correcto.\n\nSobre el proceso:\n- **Los estándares se acuerdan, no se imponen.** Una regla que el equipo no comparte se esquiva con `// ignore:` y genera resentimiento. Discutir una regla cuesta una reunión; imponerla cuesta meses de fricción.\n- **Introducir los lints de forma incremental**, por carpeta o solo para código nuevo. Activar cincuenta reglas de golpe en una base antigua genera 3.000 avisos y el equipo aprende a ignorarlos, que es el peor resultado posible.\n- **Rotar quién revisa** y fomentar que los junior revisen a los senior: distribuye el conocimiento y evita que el estándar viva en una sola cabeza.\n\nLa medida del éxito no es que el código cumpla el estándar. Es que **el equipo mantiene el estándar sin ti**.",
+      "rubric": {
+        "junior": "Propone una guía de estilo y revisar el código.",
+        "mid": "Automatiza con lints y CI y documenta las convenciones.",
+        "senior": "Ordena las herramientas por eficacia empezando por hacer imposible el error, insiste en acordar en vez de imponer, introduce reglas incrementalmente para no destruir la señal, y define el éxito como que el sistema funcione sin su intervención."
+      },
+      "followUps": [
+        "¿Cómo activas lints estrictos en una base de código antigua?",
+        "¿Qué haces si el equipo no está de acuerdo con una regla?"
+      ]
+    }
+  ],
+  "exercises": [
+    {
+      "id": "dart-e001",
+      "title": "Agrupar y contar en una sola pasada",
+      "difficulty": "easy",
+      "topic": "Colecciones",
+      "statement": "Dada una `List<Venta>` con campos `ciudad` y `importe`, devuelve un `Map<String, ({int cantidad, double total})>` con el número de ventas y el importe total por ciudad. Una sola pasada sobre la lista.",
+      "hints": [
+        "Map.putIfAbsent y el operador ??= evitan la comprobación manual de si la clave existe.",
+        "Un record es perfecto para el valor agregado: no merece una clase propia.",
+        "¿Cuántas veces recorres la lista si primero sacas las ciudades únicas y luego filtras por cada una?"
+      ],
+      "approach": "La solución ingenua es sacar las ciudades únicas y después filtrar la lista para cada una. Eso es O(ciudades × ventas): con 50 ciudades y 100.000 ventas son 5 millones de comparaciones para un problema que se resuelve en 100.000.\n\nAgrupar en una pasada es el patrón estándar: recorres una vez y vas acumulando en un `Map` indexado por la clave de agrupación. El acceso al mapa es O(1), así que el total es O(n).\n\nDos detalles idiomáticos de Dart:\n\n- **`update` con `ifAbsent`** resuelve en una sola llamada el \"si existe acumula, si no inicializa\", que escrito a mano son tres líneas y una comprobación fácil de olvidar.\n- **El record `({int cantidad, double total})`** es exactamente el caso de uso: un agregado local, sin identidad de dominio, que no justifica declarar una clase. Si este agregado empezara a viajar por toda la aplicación, entonces sí querría ser una clase con nombre.\n\nY una advertencia sobre `double` para importes monetarios: acumular decimales en coma flotante introduce error. Para dinero de verdad, céntimos en `int` o un tipo decimal.",
+      "solutionSketch": "```dart\ntypedef Agregado = ({int cantidad, double total});\n\nMap<String, Agregado> agrupar(List<Venta> ventas) {\n  final resultado = <String, Agregado>{};\n\n  for (final venta in ventas) {\n    resultado.update(\n      venta.ciudad,\n      (previo) => (\n        cantidad: previo.cantidad + 1,\n        total: previo.total + venta.importe,\n      ),\n      ifAbsent: () => (cantidad: 1, total: venta.importe),\n    );\n  }\n\n  return resultado;\n}\n```",
+      "complexity": "O(n) en tiempo, O(k) en memoria donde k es el número de ciudades distintas. La alternativa con filtrado por ciudad sería O(n·k).",
+      "pitfalls": [
+        "Recorrer la lista una vez por cada clave de agrupación.",
+        "Comprobar containsKey y luego acceder: dos búsquedas en el mapa en vez de una.",
+        "Usar double para importes monetarios y acumular error de redondeo.",
+        "Declarar una clase para un agregado que solo se usa aquí."
+      ]
+    },
+    {
+      "id": "dart-e002",
+      "title": "Implementar == y hashCode correctamente",
+      "difficulty": "easy",
+      "topic": "Clases",
+      "statement": "Esta clase falla al usarla en un `Set` y como clave de `Map`. Encuentra los dos errores y corrígelos.\n\n```dart\nclass Punto {\n  Punto(this.x, this.y);\n  double x, y;\n\n  @override\n  bool operator ==(Object other) => other is Punto && other.x == x;\n}\n```",
+      "hints": [
+        "¿Qué falta declarar cuando sobrescribes ==?",
+        "¿Compara todos los campos que definen la identidad del objeto?",
+        "¿Qué pasa si modificas x después de meter el punto en un Set?"
+      ],
+      "approach": "Hay dos errores y un problema de diseño de fondo.\n\n**Error 1: falta `hashCode`.** El contrato es que si `a == b`, entonces `a.hashCode == b.hashCode`. Al no sobrescribirlo, se hereda el de `Object`, que es distinto para cada instancia. Consecuencia: dos puntos \"iguales\" caen en cubos distintos del `Set` y la deduplicación no ocurre. Peor aún, un objeto insertado en un `Map` puede volverse inencontrable.\n\n**Error 2: `==` ignora `y`.** `Punto(1, 5) == Punto(1, 9)` devuelve true. La igualdad debe contemplar todos los campos que definen la identidad del valor.\n\n**El problema de fondo: los campos son mutables.** Una clase con igualdad estructural y campos mutables es una trampa: metes el punto en un `Set`, cambias `x`, y ahora el objeto está en el cubo equivocado. No lo encuentras al buscarlo, pero sigue ahí ocupando espacio, y `remove` tampoco lo quita. Es un bug silencioso y muy difícil de rastrear.\n\nLa corrección completa es hacer los campos `final` y añadir un constructor `const`. En código real, un `record` o `freezed` te dan todo esto sin escribirlo.",
+      "solutionSketch": "```dart\nclass Punto {\n  const Punto(this.x, this.y);\n\n  final double x;   // final: la identidad no puede cambiar\n  final double y;\n\n  @override\n  bool operator ==(Object other) =>\n      identical(this, other) ||                 // atajo barato\n      other is Punto &&\n          runtimeType == other.runtimeType &&   // evita igualar con subclases\n          x == other.x &&\n          y == other.y;\n\n  @override\n  int get hashCode => Object.hash(x, y);        // combina bien los campos\n}\n\n// Con un record no hay nada que escribir: la igualdad es estructural.\ntypedef PuntoR = ({double x, double y});\n```",
+      "complexity": "O(1) en ambos métodos. Un hashCode mal distribuido degrada las operaciones del Set y del Map de O(1) a O(n) por colisiones.",
+      "pitfalls": [
+        "Sobrescribir == sin hashCode: es el error más frecuente y el analizador lo avisa.",
+        "Usar `x.hashCode ^ y.hashCode`: colisiona para (a, b) y (b, a). Object.hash lo hace bien.",
+        "Campos mutables con igualdad estructural: el objeto se pierde dentro del Set.",
+        "Omitir la comprobación de runtimeType si hay subclases."
+      ]
+    },
+    {
+      "id": "dart-e003",
+      "title": "Modelar el resultado de una operación",
+      "difficulty": "medium",
+      "topic": "Dart 3",
+      "statement": "Diseña un tipo `Result<T, E>` con sealed classes y úsalo para un login que puede fallar por credenciales incorrectas, falta de red o cuenta bloqueada. La UI debe estar obligada por el compilador a tratar todos los casos.",
+      "hints": [
+        "Una sealed class permite al compilador saber cuáles son todas las variantes.",
+        "Los errores concretos también pueden ser una sealed class.",
+        "¿Qué pasa al añadir una cuarta causa de fallo? Debería romper la compilación donde haga falta."
+      ],
+      "approach": "La motivación: en Dart no hay excepciones comprobadas. `Future<User> login()` no dice en ninguna parte que puede fallar ni por qué, y el compilador no obliga a nadie a tratarlo. Esa información vive solo en la documentación, si es que alguien la escribió.\n\nCon `Result`, el fallo **es parte del tipo de retorno**. `Future<Result<User, LoginError>>` declara qué puede salir mal, y el `switch` exhaustivo obliga a tratarlo.\n\nDos niveles de sealed:\n- `Result` con variantes `Ok` y `Err`.\n- `LoginError` con las causas concretas del dominio.\n\nLa propiedad valiosa aparece al **evolucionar**: si mañana añades `TooManyAttempts` a `LoginError`, todos los `switch` exhaustivos sobre ese tipo **dejan de compilar**. El compilador te lleva de la mano a cada sitio que hay que actualizar. Con excepciones o con strings, ese caso nuevo se manejaría silenciosamente en el `else` genérico y el usuario vería \"Error desconocido\".\n\nDetalle de diseño: mantén `LoginError` como tipos del dominio, sin mensajes de UI dentro. El texto que ve el usuario (y su traducción) es responsabilidad de la capa de presentación; meterlo en el dominio acopla el negocio al idioma.\n\nY el coste honesto: más verbosidad que un `throw`, y Dart no tiene azúcar para propagar errores (el `?` de Rust). Por eso conviene usarlo en los límites entre capas y no en cada función interna.",
+      "solutionSketch": "```dart\nsealed class Result<T, E> {\n  const Result();\n}\n\nfinal class Ok<T, E> extends Result<T, E> {\n  const Ok(this.value);\n  final T value;\n}\n\nfinal class Err<T, E> extends Result<T, E> {\n  const Err(this.error);\n  final E error;\n}\n\n// Los errores del dominio, sin textos de UI dentro.\nsealed class LoginError {\n  const LoginError();\n}\n\nclass BadCredentials extends LoginError { const BadCredentials(); }\nclass NoNetwork extends LoginError { const NoNetwork(); }\nclass AccountLocked extends LoginError {\n  const AccountLocked(this.until);\n  final DateTime until;\n}\n\nFuture<Result<User, LoginError>> login(String email, String password) async {\n  try {\n    final user = await api.authenticate(email, password);\n    return Ok(user);\n  } on SocketException {\n    return const Err(NoNetwork());\n  } on HttpException catch (e) {\n    return Err(e.statusCode == 401\n        ? const BadCredentials()\n        : AccountLocked(DateTime.now().add(const Duration(minutes: 15))));\n  }\n}\n\n// En la UI: exhaustivo. Añadir una variante rompe aquí, que es lo que quieres.\nString mensaje(Result<User, LoginError> result) => switch (result) {\n  Ok(value: final user) => 'Hola, ${user.name}',\n  Err(error: BadCredentials()) => 'Email o contraseña incorrectos',\n  Err(error: NoNetwork()) => 'Sin conexión. Inténtalo de nuevo.',\n  Err(error: AccountLocked(:final until)) =>\n      'Cuenta bloqueada hasta las ${until.hour}:${until.minute}',\n};\n```",
+      "complexity": "Sin coste en tiempo de ejecución más allá de una asignación por resultado. El coste es de verbosidad; el beneficio, comprobación en tiempo de compilación.",
+      "pitfalls": [
+        "Poner los textos de la interfaz dentro de los tipos de error: acopla el dominio a la presentación y al idioma.",
+        "Usar `Result` en todas las funciones internas: la verbosidad deja de compensar. Mejor en los límites entre capas.",
+        "Añadir un caso `_ =>` por defecto en el switch: anula justamente la ventaja de la exhaustividad.",
+        "Mezclar Result y excepciones para el mismo tipo de fallo sin una convención clara."
+      ]
+    },
+    {
+      "id": "dart-e004",
+      "title": "Cachear futures sin duplicar peticiones",
+      "difficulty": "medium",
+      "topic": "Asincronía",
+      "statement": "Implementa una caché asíncrona: `Future<T> get(String key)`. Si se piden 10 veces la misma clave **antes** de que la primera termine, debe hacerse **una sola** petición y todos deben recibir el mismo resultado. Y si la petición falla, la clave no debe quedar envenenada.",
+      "hints": [
+        "Cachea el Future en sí, no solo su resultado.",
+        "¿Qué hay en la caché durante el tiempo en que la petición está en vuelo?",
+        "Si guardas un Future que acaba en error, ¿qué recibe quien pregunte mañana?"
+      ],
+      "approach": "La clave del ejercicio es entender **qué se cachea**. La solución ingenua guarda el *valor* una vez resuelto:\n\n```dart\nif (_cache.containsKey(key)) return _cache[key]!;\nfinal value = await fetch(key);   // 10 llamadas concurrentes entran todas aquí\n_cache[key] = value;\n```\n\nCon 10 peticiones simultáneas, las 10 llegan al `await` antes de que ninguna haya escrito en la caché: se hacen 10 peticiones de red. Esto es el problema del **cache stampede**, y aparece justo cuando más duele: al arrancar la app, cuando todo se pide a la vez.\n\nLa solución es guardar el **`Future`**, no el valor. El future se inserta en la caché **de forma síncrona**, antes de ningún `await`. Las 9 llamadas siguientes lo encuentran y se suscriben al mismo future. Cuando se resuelve, los 10 reciben el mismo resultado.\n\nEl segundo requisito es el que se olvida: **un future fallido cacheado envenena la clave para siempre**. Todos los que pregunten después recibirán el error de hace tres horas, aunque la red ya funcione. Hay que eliminarlo de la caché al fallar, lo que se hace enganchando un `catchError` al future **antes** de guardarlo.\n\nExtensión natural en producción: TTL por entrada, límite de tamaño con desalojo LRU, y una forma de invalidar explícitamente.",
+      "solutionSketch": "```dart\nclass AsyncCache<T> {\n  AsyncCache(this._fetch);\n\n  final Future<T> Function(String key) _fetch;\n  final _inFlight = <String, Future<T>>{};\n\n  Future<T> get(String key) {\n    // Hay uno en vuelo o ya resuelto: reutilízalo.\n    final existing = _inFlight[key];\n    if (existing != null) return existing;\n\n    // Se inserta SÍNCRONAMENTE, antes de cualquier await.\n    // Por eso las llamadas concurrentes encuentran este mismo future.\n    final future = _fetch(key);\n    _inFlight[key] = future;\n\n    // Si falla, se retira para no envenenar la clave.\n    future.catchError((Object error) {\n      _inFlight.remove(key);\n      throw error;   // se relanza para que el llamador lo reciba\n    });\n\n    return future;\n  }\n\n  void invalidate(String key) => _inFlight.remove(key);\n  void clear() => _inFlight.clear();\n}\n```",
+      "complexity": "O(1) por consulta. Reduce N peticiones concurrentes por clave a una sola.",
+      "pitfalls": [
+        "Cachear el valor en vez del future: no evita las peticiones concurrentes.",
+        "Insertar en la caché después de un await: se pierde la ventana en la que ocurre el problema.",
+        "Dejar el future fallido en la caché: la clave queda rota indefinidamente.",
+        "No limitar el tamaño: la caché crece sin techo y acaba siendo una fuga de memoria."
+      ]
+    },
+    {
+      "id": "dart-e005",
+      "title": "Reintento con backoff exponencial",
+      "difficulty": "medium",
+      "topic": "Asincronía",
+      "statement": "Escribe una función genérica `retry` que reintente una operación asíncrona con backoff exponencial. Requisitos: número máximo de intentos, jitter, un predicado que decida si un error concreto merece reintento, y posibilidad de cancelar.",
+      "hints": [
+        "Reintentar un error 400 de validación no tiene sentido: no va a cambiar.",
+        "¿Qué pasa si 10.000 clientes reintentan exactamente a los 2, 4 y 8 segundos tras una caída?",
+        "Un tope máximo al retardo evita esperas de horas tras varios intentos."
+      ],
+      "approach": "Tres decisiones separan una implementación correcta de un bucle `for` con `sleep`.\n\n**1. Qué errores merecen reintento.** Reintentar a ciegas es un error de diseño. Un timeout o un 503 son transitorios y el reintento tiene sentido. Un 400 de validación o un 404 son permanentes: reintentar solo gasta batería y retrasa el mensaje de error al usuario. Por eso el predicado `retryIf` debe ser un parámetro, no una decisión enterrada en la función.\n\n**2. El jitter no es opcional.** Sin él, tras una caída del servidor **todos los clientes reintentan a la vez**, en los mismos instantes exactos. El servidor recibe una avalancha sincronizada justo cuando intenta recuperarse, y vuelve a caer. Es el *thundering herd*, y el jitter (una aleatoriedad en el retardo) es lo que rompe la sincronización. Es la parte que más se omite y la que más daño hace a escala.\n\n**3. El tope máximo.** Sin él, el octavo intento espera 256 segundos y el usuario ya se fue. `maxDelay` acota el crecimiento.\n\nY la cancelación: si el usuario sale de la pantalla, el reintento debe parar. Un flag comprobado entre intentos es suficiente y mucho más simple que intentar interrumpir el `await` en curso.\n\nNota práctica: `package:retry` ya implementa esto correctamente. Vale la pena escribirlo una vez para entenderlo, y usar el paquete en producción.",
+      "solutionSketch": "```dart\nFuture<T> retry<T>(\n  Future<T> Function() operation, {\n  int maxAttempts = 5,\n  Duration initialDelay = const Duration(milliseconds: 200),\n  Duration maxDelay = const Duration(seconds: 30),\n  bool Function(Object error)? retryIf,\n  bool Function()? isCancelled,\n}) async {\n  final random = Random();\n  var attempt = 0;\n\n  while (true) {\n    attempt++;\n    try {\n      return await operation();\n    } catch (error) {\n      final noMoreAttempts = attempt >= maxAttempts;\n      final permanent = retryIf != null && !retryIf(error);\n      final cancelled = isCancelled?.call() ?? false;\n\n      if (noMoreAttempts || permanent || cancelled) rethrow;\n\n      // Exponencial, acotado, y con jitter para romper la sincronización\n      // entre clientes tras una caída del servidor.\n      final exponential = initialDelay.inMilliseconds * pow(2, attempt - 1);\n      final capped = min(exponential.toInt(), maxDelay.inMilliseconds);\n      final jittered = random.nextInt(capped + 1);\n\n      await Future<void>.delayed(Duration(milliseconds: jittered));\n    }\n  }\n}\n\n// Uso: solo se reintenta lo transitorio.\nfinal user = await retry(\n  () => api.fetchUser(id),\n  retryIf: (e) => e is SocketException || (e is HttpException && e.code >= 500),\n);\n```",
+      "complexity": "El tiempo total está acotado por maxAttempts × maxDelay. El jitter completo (aleatorio entre 0 y el tope) distribuye la carga mejor que un jitter parcial.",
+      "pitfalls": [
+        "Reintentar errores permanentes: gasta recursos y retrasa el error real al usuario.",
+        "Backoff sin jitter: avalancha sincronizada cuando el servidor se recupera.",
+        "Sin tope de retardo: esperas absurdas en los últimos intentos.",
+        "Reintentar una operación no idempotente: se duplica el efecto en el servidor."
+      ]
+    },
+    {
+      "id": "dart-e006",
+      "title": "Procesar un fichero grande sin agotar la memoria",
+      "difficulty": "medium",
+      "topic": "Streams",
+      "statement": "Un CSV de 2 GB con una línea por registro. Cuenta cuántos registros cumplen una condición y calcula la media de una columna, sin cargar el fichero en memoria.",
+      "hints": [
+        "readAsString carga los 2 GB de golpe. ¿Qué alternativa hay?",
+        "openRead devuelve un Stream de trozos de bytes, no de líneas.",
+        "Una media se puede calcular acumulando suma y cuenta, sin guardar los valores."
+      ],
+      "approach": "El error obvio es `File.readAsString()`: carga 2 GB en memoria y en un móvil el sistema mata el proceso antes de terminar.\n\nLa solución es **procesamiento en flujo**: leer, transformar y descartar, manteniendo en memoria solo el registro actual y los acumuladores.\n\nLa cadena idiomática en Dart:\n\n```\nfile.openRead()        // Stream<List<int>>: trozos de bytes de tamaño arbitrario\n  .transform(utf8.decoder)   // Stream<String>: texto, aún en trozos\n  .transform(const LineSplitter())  // Stream<String>: ahora sí, líneas\n```\n\nEl detalle que hace que esto funcione y que mucha gente implementa mal a mano: los trozos de `openRead` **no coinciden con los límites de línea ni con los de carácter UTF-8**. Un trozo puede cortar por la mitad un carácter multibyte o una línea. `utf8.decoder` y `LineSplitter` son transformadores con estado que mantienen el resto pendiente entre trozos y lo resuelven correctamente. Escribir esto a mano con `split('\\n')` sobre cada trozo produce registros corruptos en los límites, y solo se nota con ficheros grandes y acentos.\n\nSobre los acumuladores: la media se calcula con suma y cuenta, sin guardar los valores. Si además necesitaras la mediana o percentiles, no hay forma exacta en una pasada con memoria constante: habría que usar un algoritmo aproximado (t-digest) o dos pasadas.\n\nY el `await for` da **contrapresión** gratis: mientras procesas una línea, el stream no lee más del disco. Eso es lo que mantiene la memoria plana.",
+      "solutionSketch": "```dart\nFuture<({int cumplen, double media})> procesar(String ruta) async {\n  final file = File(ruta);\n\n  var cumplen = 0;\n  var suma = 0.0;\n  var contados = 0;\n  var primera = true;\n\n  final lineas = file\n      .openRead()\n      .transform(utf8.decoder)      // gestiona caracteres partidos entre trozos\n      .transform(const LineSplitter()); // gestiona líneas partidas entre trozos\n\n  // await for aplica contrapresión: no se lee más hasta procesar esta línea.\n  await for (final linea in lineas) {\n    if (primera) { primera = false; continue; }  // cabecera\n    if (linea.isEmpty) continue;\n\n    final campos = linea.split(',');\n    final valor = double.tryParse(campos[2]);\n    if (valor == null) continue;   // fila corrupta: no abortar por una línea\n\n    if (campos[1] == 'activo') cumplen++;\n    suma += valor;\n    contados++;\n  }\n\n  return (cumplen: cumplen, media: contados == 0 ? 0 : suma / contados);\n}\n```",
+      "complexity": "O(n) en tiempo, O(1) en memoria: solo la línea actual y los acumuladores, independientemente del tamaño del fichero.",
+      "pitfalls": [
+        "readAsString o readAsLines: cargan el fichero entero.",
+        "Hacer split('\\n') sobre cada trozo de openRead: rompe líneas y caracteres UTF-8 en los límites.",
+        "Acumular las líneas en una lista para procesarlas después: anula toda la ventaja.",
+        "Abortar el proceso entero por una fila mal formada de dos millones.",
+        "Un CSV real con comas dentro de comillas necesita un parser de verdad, no split(',')."
+      ]
+    },
+    {
+      "id": "dart-e007",
+      "title": "Parser de JSON tipado y tolerante a fallos",
+      "difficulty": "medium",
+      "topic": "Tipos",
+      "statement": "Escribe el `fromJson` de un modelo que debe sobrevivir a una API imperfecta: campos ausentes, tipos inesperados (un número donde esperas un string), nulls no documentados y listas que a veces llegan como objeto. Sin usar `dynamic` en el resto del código.",
+      "hints": [
+        "jsonDecode devuelve dynamic: ese es el borde del sistema.",
+        "`as` lanza si el tipo no coincide; `as?` no existe, pero sí `is` y los patrones.",
+        "¿Qué prefieres: un objeto con valores por defecto o un error explícito? Depende del campo."
+      ],
+      "approach": "El principio de arquitectura: **`dynamic` se contiene en la frontera**. `jsonDecode` devuelve `dynamic`, y la función `fromJson` es el único sitio donde eso es aceptable. A partir de ahí, todo el código trabaja con tipos reales. Si `dynamic` se filtra hacia dentro, has perdido el sistema de tipos en toda la aplicación.\n\nLa decisión de diseño real es **qué hacer con cada campo malo**, y no tiene una respuesta única:\n\n- **Campo esencial ausente o inválido** (el `id`): fallar ruidosamente. Un objeto sin identidad no sirve para nada, y crear uno con `id: ''` propaga el problema a un punto lejano donde será incomprensible.\n- **Campo opcional** (la biografía): valor por defecto y seguir.\n- **Campo con tipo inesperado pero convertible** (un `int` donde esperabas `String`): convertir, y probablemente registrar un aviso. Las APIs reales hacen esto constantemente.\n\nUn patrón útil es un conjunto de helpers (`_string`, `_int`, `_list`) que encapsulan la comprobación y la conversión, para que el `fromJson` se lea como una lista de campos y no como una maraña de `is` y `as`.\n\nLos patrones de Dart 3 ayudan mucho aquí: `if (json case {'name': final String name})` comprueba la presencia y el tipo en una sola expresión, y promociona la variable.\n\nY el consejo de integración que ahorra más tiempo: **registra el JSON crudo cuando el parseo falle** (sin datos personales). Un error de parseo sin el payload que lo causó es prácticamente imposible de reproducir.",
+      "solutionSketch": "```dart\nclass User {\n  const User({\n    required this.id,\n    required this.name,\n    this.bio = '',\n    this.tags = const [],\n  });\n\n  factory User.fromJson(Map<String, dynamic> json) {\n    // Esencial: si falta o es inválido, fallamos aquí y no más adelante.\n    final id = _string(json['id']);\n    if (id == null || id.isEmpty) {\n      throw FormatException('User sin id válido', json);\n    }\n\n    return User(\n      id: id,\n      name: _string(json['name']) ?? 'Sin nombre',\n      bio: _string(json['bio']) ?? '',\n      tags: _stringList(json['tags']),\n    );\n  }\n\n  final String id;\n  final String name;\n  final String bio;\n  final List<String> tags;\n\n  /// Acepta String y también números, que algunas APIs envían sin comillas.\n  static String? _string(Object? value) => switch (value) {\n    final String s => s,\n    final num n => n.toString(),\n    _ => null,\n  };\n\n  /// Tolera que el campo llegue como elemento suelto en vez de como lista.\n  static List<String> _stringList(Object? value) => switch (value) {\n    final List<dynamic> list =>\n      list.map(_string).whereType<String>().toList(growable: false),\n    final String s => [s],\n    _ => const [],\n  };\n}\n```",
+      "complexity": "O(n) sobre el tamaño del JSON. El coste añadido de las comprobaciones es despreciable frente al del propio parseo.",
+      "pitfalls": [
+        "Usar `as String` directamente: lanza un TypeError críptico en cuanto la API cambia algo.",
+        "Devolver valores por defecto para campos esenciales: el error aparece mucho más tarde y lejos de su causa.",
+        "Dejar que dynamic se escape de la función de parseo hacia el resto del código.",
+        "No registrar el payload que causó el fallo: irreproducible en producción.",
+        "Tragarse todos los errores en silencio: la app funciona con datos incorrectos y nadie se entera."
+      ]
+    },
+    {
+      "id": "dart-e008",
+      "title": "Ejecutar tareas con concurrencia limitada",
+      "difficulty": "hard",
+      "topic": "Asincronía",
+      "statement": "Tienes 1.000 URLs que descargar. `Future.wait` las lanza todas a la vez y el servidor te corta o el dispositivo se queda sin sockets. Implementa un ejecutor que mantenga exactamente N descargas en vuelo, devuelva los resultados en el orden original, y no aborte todo si una falla.",
+      "hints": [
+        "Future.wait es todo o nada: lanza todas y falla con la primera excepción.",
+        "Piensa en N \"trabajadores\" consumiendo de una cola compartida.",
+        "Si guardas los resultados por índice, el orden se conserva aunque terminen desordenados."
+      ],
+      "approach": "`Future.wait` tiene dos problemas para este caso: **no limita la concurrencia** (lanza las 1.000 de golpe) y es **todo o nada** (la primera excepción rechaza el conjunto, y las demás siguen ejecutándose en segundo plano sin que nadie recoja sus errores, lo que produce avisos de *unhandled exception*).\n\nEl patrón correcto es un **pool de trabajadores**: se crean N tareas asíncronas que compiten por consumir de un índice compartido. Cada una toma el siguiente elemento, lo procesa, guarda el resultado en su posición y vuelve a por otro. Cuando el índice se agota, los trabajadores terminan.\n\nPor qué funciona sin locks: aunque haya N trabajadores lógicos, **todos se ejecutan en el mismo isolate**, y el código entre dos `await` es atómico. `final i = nextIndex++;` no puede ser interrumpido a medias. Esto es una consecuencia directa del modelo de concurrencia de Dart y es lo que hace que el patrón sea tan simple aquí comparado con lenguajes con hilos reales.\n\n**El orden** se conserva escribiendo en `results[i]`, no haciendo `add`: las tareas terminan desordenadas pero cada resultado va a su sitio.\n\n**Los fallos** se capturan por tarea y se guardan como resultado, en vez de propagarse. Devolver `List<Result>` en lugar de `List<T>` obliga al llamador a decidir qué hacer con los fallos parciales, que es lo correcto: 950 descargas buenas y 50 malas suele ser un resultado útil, no un fracaso.\n\nNota: `package:pool` implementa este patrón de forma más general. Escribirlo una vez ayuda a entender el modelo de concurrencia de Dart.",
+      "solutionSketch": "```dart\ntypedef TaskResult<T> = ({T? value, Object? error});\n\nFuture<List<TaskResult<T>>> runWithConcurrency<T>(\n  List<Future<T> Function()> tasks, {\n  int concurrency = 6,\n}) async {\n  final results = List<TaskResult<T>?>.filled(tasks.length, null);\n  var nextIndex = 0;\n\n  Future<void> worker() async {\n    while (true) {\n      // Atómico: no hay await entre la lectura y el incremento,\n      // así que ningún otro trabajador puede colarse aquí.\n      final index = nextIndex++;\n      if (index >= tasks.length) return;\n\n      try {\n        results[index] = (value: await tasks[index](), error: null);\n      } catch (error) {\n        // Un fallo no aborta el resto.\n        results[index] = (value: null, error: error);\n      }\n    }\n  }\n\n  final workers = List.generate(\n    min(concurrency, tasks.length),\n    (_) => worker(),\n  );\n  await Future.wait(workers);\n\n  return results.cast<TaskResult<T>>();\n}\n```",
+      "complexity": "Tiempo total ≈ (n / concurrencia) × duración media. Memoria O(n) por los resultados, con solo N operaciones vivas a la vez.",
+      "pitfalls": [
+        "Future.wait sin límite: agota sockets, memoria, o el servidor te bloquea por exceso de peticiones.",
+        "Trocear en lotes de N y esperar a que acabe cada lote: el lote va al ritmo del más lento y desperdicia paralelismo.",
+        "Usar add() para los resultados: el orden se pierde.",
+        "Dejar que una excepción escape del trabajador: mata ese trabajador y reduce la concurrencia silenciosamente.",
+        "Concurrencia demasiado alta: más no siempre es más rápido, y el servidor puede penalizarte."
+      ]
+    },
+    {
+      "id": "dart-e009",
+      "title": "Isolate worker persistente y bidireccional",
+      "difficulty": "hard",
+      "topic": "Concurrencia",
+      "statement": "Monta un isolate que se mantenga vivo procesando peticiones. Debe soportar varias peticiones concurrentes, correlacionar cada respuesta con su petición, propagar errores al llamador correcto, y cerrarse limpiamente.",
+      "hints": [
+        "Necesitas un intercambio inicial de puertos antes de poder hablar en ambas direcciones.",
+        "Si mandas tres peticiones seguidas, ¿cómo sabes a cuál corresponde cada respuesta?",
+        "Una excepción en el isolate hijo no llega sola al padre."
+      ],
+      "approach": "`Isolate.run()` resuelve el caso puntual, pero crea y destruye un isolate por tarea. Si vas a procesar miles de peticiones, ese coste de arranque se acumula y compensa mantener uno vivo.\n\nLas cuatro piezas que hay que resolver:\n\n**1. El handshake.** `Isolate.spawn` solo puede pasar un `SendPort` hacia el hijo. Para tener canal bidireccional, lo primero que hace el hijo es crear su propio `ReceivePort` y enviar su `SendPort` de vuelta. Hasta ese intercambio no hay conversación posible, y el padre debe esperarlo.\n\n**2. La correlación.** Este es el punto que distingue una implementación real de un ejemplo de tutorial. Si mandas tres peticiones y llegan tres respuestas, el puerto es un único canal: no hay nada que las asocie. La solución es un **id por petición** y un `Map<int, Completer>` en el padre. Cada respuesta trae su id, se busca el completer correspondiente y se resuelve. Sin esto, solo puedes tener una petición en vuelo.\n\n**3. Los errores.** Una excepción en el hijo no viaja sola. Hay que capturarla dentro del hijo y enviarla como un mensaje de respuesta marcado como error, para poder completar con error **el completer correcto**. (Existe además `onError` en el spawn para los fallos catastróficos que matan el isolate.)\n\n**4. El cierre.** Cerrar el `ReceivePort`, matar el isolate y, muy importante, **completar con error todos los completers pendientes**. Si no, quien esté esperando una respuesta se queda colgado para siempre: el peor tipo de bug, porque no hay ningún síntoma.\n\nY el recordatorio de siempre: los mensajes se **copian**. Si las peticiones o las respuestas llevan datos grandes, esa copia puede dominar el coste y hacer que el worker no compense.",
+      "solutionSketch": "```dart\nclass IsolateWorker {\n  IsolateWorker._(this._isolate, this._sendPort, this._receivePort);\n\n  final Isolate _isolate;\n  final SendPort _sendPort;\n  final ReceivePort _receivePort;\n  final _pending = <int, Completer<Object?>>{};\n  var _nextId = 0;\n  var _closed = false;\n\n  static Future<IsolateWorker> spawn() async {\n    final receivePort = ReceivePort();\n    final isolate = await Isolate.spawn(_entryPoint, receivePort.sendPort);\n\n    final events = receivePort.asBroadcastStream();\n    // Handshake: el primer mensaje del hijo es su SendPort.\n    final sendPort = await events.first as SendPort;\n\n    final worker = IsolateWorker._(isolate, sendPort, receivePort);\n    events.listen(worker._onMessage);\n    return worker;\n  }\n\n  Future<Object?> request(Object? payload) {\n    if (_closed) throw StateError('Worker cerrado');\n    final id = _nextId++;\n    final completer = Completer<Object?>();\n    _pending[id] = completer;          // así sabremos a quién responder\n    _sendPort.send((id: id, payload: payload));\n    return completer.future;\n  }\n\n  void _onMessage(dynamic message) {\n    final (:int id, :Object? result, :Object? error) = message as dynamic;\n    final completer = _pending.remove(id);\n    if (completer == null) return;     // respuesta huérfana: ignorar\n    error != null\n        ? completer.completeError(error)\n        : completer.complete(result);\n  }\n\n  Future<void> close() async {\n    _closed = true;\n    // Nadie debe quedarse esperando para siempre.\n    for (final completer in _pending.values) {\n      completer.completeError(StateError('Worker cerrado'));\n    }\n    _pending.clear();\n    _receivePort.close();\n    _isolate.kill(priority: Isolate.immediate);\n  }\n\n  static void _entryPoint(SendPort toParent) {\n    final fromParent = ReceivePort();\n    toParent.send(fromParent.sendPort);   // completa el handshake\n\n    fromParent.listen((dynamic message) {\n      final (:int id, :Object? payload) = message as dynamic;\n      try {\n        toParent.send((id: id, result: _process(payload), error: null));\n      } catch (error) {\n        // Se envía como mensaje: así se completa el completer correcto.\n        toParent.send((id: id, result: null, error: error.toString()));\n      }\n    });\n  }\n\n  static Object? _process(Object? payload) => payload; // el trabajo real\n}\n```",
+      "complexity": "Arranque una sola vez en lugar de por tarea. Coste por petición: dos copias de mensaje, O(tamaño del payload).",
+      "pitfalls": [
+        "Sin id de correlación: solo funciona con una petición en vuelo; con dos, las respuestas se cruzan.",
+        "No propagar los errores del hijo: el llamador espera indefinidamente.",
+        "No completar los pendientes al cerrar: cuelgues silenciosos sin ningún síntoma.",
+        "Olvidar matar el isolate o cerrar el puerto: fuga de recursos del sistema operativo.",
+        "Enviar payloads grandes: la copia puede costar más que el propio cálculo."
+      ]
+    },
+    {
+      "id": "dart-e010",
+      "title": "Extension type sobre un tipo primitivo",
+      "difficulty": "hard",
+      "topic": "Sistema de tipos",
+      "statement": "Tu código pasa `String` para userId, email y token, y ya ha habido un bug por intercambiar dos argumentos. Crea tipos distinguibles por el compilador usando extension types, sin coste en tiempo de ejecución ni asignaciones.",
+      "hints": [
+        "Una clase envolvente resuelve el problema de tipos pero asigna un objeto por valor.",
+        "Un extension type se borra en tiempo de compilación: en runtime sigue siendo un String.",
+        "¿Cómo impides que alguien construya un Email con un texto que no lo es?"
+      ],
+      "approach": "El problema tiene nombre: **primitive obsession**. Cuando todo es `String`, el compilador no puede distinguir `enviar(userId, email)` de `enviar(email, userId)`. El bug compila perfectamente y falla en producción.\n\nLa solución clásica es una clase envolvente, y funciona, pero **asigna un objeto por cada valor**. En una lista de 10.000 correos son 10.000 asignaciones que no aportan nada en runtime: el valor real sigue siendo el string de dentro.\n\nLos **extension types** (Dart 3.3) resuelven exactamente esto: son una vista tipada sobre un valor existente, **borrada en tiempo de compilación**. En el código generado no hay envoltorio: es un `String` puro. Coste cero en memoria y en indirecciones, con seguridad de tipos completa al compilar.\n\nLas dos decisiones de diseño importantes:\n\n**`interface` o no.** Por defecto, un extension type **no** expone los miembros del tipo subyacente: `Email` no tiene `.length` ni `.contains`. Eso es lo que quieres casi siempre, porque el encapsulamiento es el objetivo: si expones toda la API de `String`, alguien hará `email.substring(3)` y habrás vuelto al punto de partida. Expón explícitamente solo lo que tenga sentido para el concepto.\n\n**Validación.** Un constructor nombrado que valida y un constructor privado para el camino interno. Esto da una garantía valiosa: **si tienes un `Email`, es válido**. La validación ocurre una vez, en el borde, y el resto del código no necesita volver a comprobarlo.\n\nY el límite honesto: el borrado en compilación significa que en **runtime no hay tipo**. `email is Email` es `email is String`, y no puedes hacer dispatch dinámico ni distinguirlos en un `switch` sobre tipos en ejecución. Si necesitas eso, necesitas una clase de verdad. Los extension types son seguridad en compilación, no en ejecución.",
+      "solutionSketch": "```dart\nextension type const UserId(String value) {\n  // Sin `implements String`: no hereda la API de String.\n  // Eso es deliberado: un UserId no debe poder hacer .substring().\n}\n\nextension type const Email._(String value) {\n  /// Único camino de construcción: si tienes un Email, es válido.\n  factory Email(String raw) {\n    final trimmed = raw.trim().toLowerCase();\n    if (!_pattern.hasMatch(trimmed)) {\n      throw FormatException('Email inválido: $raw');\n    }\n    return Email._(trimmed);\n  }\n\n  static final _pattern = RegExp(r'^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$');\n\n  /// Se expone solo lo que tiene sentido para el concepto.\n  String get domain => value.split('@').last;\n}\n\nextension type const AuthToken(String value) {\n  /// Nunca filtrar el token en un log.\n  String toString() => 'AuthToken(***)';\n}\n\n// Ahora el compilador impide el bug:\nvoid enviar(UserId id, Email destino) { }\n\nfinal id = UserId('u-42');\nfinal email = Email('ana@ejemplo.com');\n\nenviar(id, email);   // correcto\n// enviar(email, id); // error de compilación: los tipos no coinciden\n```",
+      "complexity": "Coste cero en tiempo de ejecución: se borra en compilación y no hay asignaciones ni indirecciones. La validación es O(longitud) y solo en la construcción.",
+      "pitfalls": [
+        "Usar `implements String`: expone toda la API del tipo subyacente y anula el encapsulamiento que buscabas.",
+        "Esperar comprobación de tipos en runtime: se borran, `is` no los distingue.",
+        "Dejar público el constructor primario cuando quieres validación: se puede saltar.",
+        "Usarlos donde hace falta polimorfismo real: ahí necesitas una clase.",
+        "Olvidar que la igualdad y el hashCode son los del tipo subyacente: dos Email iguales lo son porque sus strings lo son."
+      ]
+    }
+  ],
+  "roadmap": {
+    "stages": [
+      {
+        "id": "dart-s1",
+        "level": "junior",
+        "title": "Etapa 1 · El lenguaje: leerlo y escribirlo",
+        "estimatedWeeks": 8,
+        "goal": "Escribir Dart idiomático sin traducir mentalmente desde otro lenguaje. Mucha gente llega a Dart desde Flutter y nunca aprende el lenguaje: acaba atascada en errores que no son de Flutter y sin saber por dónde empezar a mirar.",
+        "skills": [
+          "Sintaxis",
+          "Null safety",
+          "Colecciones",
+          "Clases",
+          "Asincronía básica",
+          "Herramientas del SDK"
+        ],
+        "milestones": [
+          {
+            "id": "dart-m101",
+            "title": "Null safety sin usar `!`",
+            "detail": "Escribe un programa de varios cientos de líneas sin un solo null assertion. Cada `!` que necesites es una pista de que el modelo de datos puede mejorar."
+          },
+          {
+            "id": "dart-m102",
+            "title": "Ejercicios de algoritmos en Dart puro",
+            "detail": "Treinta o cuarenta problemas de manipulación de colecciones. No por el algoritmo, sino para interiorizar map, where, fold, reduce y los métodos de List, Set y Map."
+          },
+          {
+            "id": "dart-m103",
+            "title": "Una CLI real",
+            "detail": "Una herramienta de línea de comandos que hagas servir tú de verdad, con `args` para los parámetros y lectura y escritura de ficheros."
+          },
+          {
+            "id": "dart-m104",
+            "title": "Asincronía sin copiar y pegar",
+            "detail": "Escribe código con Future y async/await entendiendo cuándo se suspende la ejecución y cuándo no. Dibuja el orden de ejecución en papel antes de ejecutarlo y comprueba si acertaste."
+          },
+          {
+            "id": "dart-m105",
+            "title": "Lee Effective Dart entero",
+            "detail": "Las cuatro secciones. Es corto, está bien escrito, y explica el porqué de las convenciones que verás en todo el código ajeno."
+          }
+        ],
+        "resources": [
+          {
+            "title": "Dart language tour",
+            "url": "https://dart.dev/language",
+            "kind": "docs"
+          },
+          {
+            "title": "Effective Dart",
+            "url": "https://dart.dev/effective-dart",
+            "kind": "docs"
+          },
+          {
+            "title": "Dart codelabs",
+            "url": "https://dart.dev/codelabs",
+            "kind": "course"
+          },
+          {
+            "title": "DartPad",
+            "url": "https://dartpad.dev/",
+            "kind": "docs"
+          }
+        ],
+        "readinessSignals": [
+          "Lees código Dart ajeno sin tropezar con la sintaxis.",
+          "Sabes cuándo un error es del lenguaje y cuándo del framework.",
+          "No necesitas `!` para que el compilador te deje en paz."
+        ]
+      },
+      {
+        "id": "dart-s2",
+        "level": "junior",
+        "title": "Etapa 2 · Modelado: decir lo que quieres decir",
+        "estimatedWeeks": 12,
+        "goal": "Usar el sistema de tipos como herramienta de diseño y no como un trámite. En esta etapa se aprende que un buen modelo de datos elimina más bugs que cualquier cantidad de tests.",
+        "skills": [
+          "Sealed classes",
+          "Records",
+          "Patrones",
+          "Inmutabilidad",
+          "Genéricos",
+          "Testing"
+        ],
+        "milestones": [
+          {
+            "id": "dart-m201",
+            "title": "Haz irrepresentables los estados imposibles",
+            "detail": "Refactoriza un modelo con banderas booleanas sueltas a una sealed class. Cuenta cuántas combinaciones permitía antes y cuántas permite ahora."
+          },
+          {
+            "id": "dart-m202",
+            "title": "Clases inmutables por defecto",
+            "detail": "Un proyecto entero con todos los campos final, copyWith e igualdad estructural. Nota qué categoría de bugs deja de aparecer."
+          },
+          {
+            "id": "dart-m203",
+            "title": "Genéricos propios",
+            "detail": "Escribe una estructura de datos genérica con restricciones (`<T extends Comparable<T>>`). Entender la varianza es lo que separa usar genéricos de diseñarlos."
+          },
+          {
+            "id": "dart-m204",
+            "title": "Tests que atrapan bugs",
+            "detail": "Escribe los tests antes del código en una funcionalidad completa. El objetivo no es la ortodoxia TDD: es comprobar cómo cambia tu diseño cuando piensas primero en cómo se usa."
+          },
+          {
+            "id": "dart-m205",
+            "title": "Un paquete publicado",
+            "detail": "Algo pequeño pero completo en pub.dev, con documentación, ejemplo y CHANGELOG. Diseñar para otros obliga a pensar la API, no solo la implementación."
+          }
+        ],
+        "resources": [
+          {
+            "title": "Patterns and records",
+            "url": "https://dart.dev/language/patterns",
+            "kind": "docs"
+          },
+          {
+            "title": "Class modifiers",
+            "url": "https://dart.dev/language/class-modifiers",
+            "kind": "docs"
+          },
+          {
+            "title": "Testing in Dart",
+            "url": "https://dart.dev/guides/testing",
+            "kind": "docs"
+          },
+          {
+            "title": "Publishing a package",
+            "url": "https://dart.dev/tools/pub/publishing",
+            "kind": "docs"
+          }
+        ],
+        "readinessSignals": [
+          "Diseñas el modelo de datos antes de escribir la lógica.",
+          "El compilador te avisa de los casos que olvidaste, porque has hecho que pueda.",
+          "Distingues cuándo un record basta y cuándo hace falta una clase."
+        ]
+      },
+      {
+        "id": "dart-s3",
+        "level": "mid",
+        "title": "Etapa 3 · El runtime: saber qué pasa por debajo",
+        "estimatedWeeks": 20,
+        "goal": "Entender cómo se ejecuta tu código. Es lo que permite diagnosticar problemas que no salen en ninguna búsqueda porque dependen de tu caso concreto.",
+        "skills": [
+          "Event loop",
+          "Streams",
+          "Isolates",
+          "Rendimiento",
+          "Interoperabilidad",
+          "Generación de código"
+        ],
+        "milestones": [
+          {
+            "id": "dart-m301",
+            "title": "Predice el orden de ejecución",
+            "detail": "Coge un fragmento con async, await, then, scheduleMicrotask y Timer, y predice la salida exacta antes de ejecutarlo. Repite hasta acertar siempre. Es el mejor ejercicio que existe para entender el event loop."
+          },
+          {
+            "id": "dart-m302",
+            "title": "Streams a fondo",
+            "detail": "Implementa un StreamTransformer propio. Entiende la contrapresión, la diferencia entre single-subscription y broadcast, y cuándo cada uno pierde eventos."
+          },
+          {
+            "id": "dart-m303",
+            "title": "Paraleliza algo de verdad",
+            "detail": "Coge una tarea de CPU real, mide, muévela a un isolate y vuelve a medir. Comprueba también el caso en que el isolate sale más caro por la copia de datos."
+          },
+          {
+            "id": "dart-m304",
+            "title": "Perfila y optimiza con números",
+            "detail": "Usa el CPU profiler sobre código propio. Documenta el antes y el después. Descubre al menos una vez que tu intuición sobre dónde estaba el cuello de botella era incorrecta."
+          },
+          {
+            "id": "dart-m305",
+            "title": "Escribe un builder",
+            "detail": "Un generador de código con source_gen, aunque sea trivial. Entender cómo funciona build_runner desde dentro cambia la relación con todos los paquetes que lo usan."
+          },
+          {
+            "id": "dart-m306",
+            "title": "Cruza a nativo",
+            "detail": "Llama a una biblioteca C con dart:ffi y ffigen. Gestiona la memoria manualmente al menos una vez para entender lo que el GC hace por ti."
+          }
+        ],
+        "resources": [
+          {
+            "title": "Concurrency in Dart",
+            "url": "https://dart.dev/language/concurrency",
+            "kind": "docs"
+          },
+          {
+            "title": "Asynchronous programming: futures, async, await",
+            "url": "https://dart.dev/libraries/async/async-await",
+            "kind": "docs"
+          },
+          {
+            "title": "C interop using dart:ffi",
+            "url": "https://dart.dev/interop/c-interop",
+            "kind": "docs"
+          },
+          {
+            "title": "source_gen",
+            "url": "https://pub.dev/packages/source_gen",
+            "kind": "repo"
+          },
+          {
+            "title": "Código fuente del SDK de Dart",
+            "url": "https://github.com/dart-lang/sdk",
+            "kind": "repo"
+          }
+        ],
+        "readinessSignals": [
+          "Explicas por qué un fragmento asíncrono imprime en ese orden concreto.",
+          "Decides entre async, isolate o rediseño según el tipo de trabajo.",
+          "Lees el código del SDK cuando la documentación no llega."
+        ]
+      },
+      {
+        "id": "dart-s4",
+        "level": "senior",
+        "title": "Etapa 4 · Criterio: decidir por el equipo",
+        "estimatedWeeks": 40,
+        "goal": "El salto no es técnico. Es pasar de resolver problemas a decidir cuáles merecen resolverse, y hacer que el resto del equipo trabaje mejor. Un senior cuyo impacto se limita a su propio código es un mid muy productivo.",
+        "skills": [
+          "Diseño de APIs",
+          "Arquitectura a escala",
+          "Gestión de deuda",
+          "Mentoría",
+          "Decisiones con incertidumbre"
+        ],
+        "milestones": [
+          {
+            "id": "dart-m401",
+            "title": "Una API pública que evoluciona sin romper",
+            "detail": "Mantén un paquete durante al menos un año, con varias versiones mayores y deprecaciones ordenadas. Nada enseña más sobre diseño que convivir con tus propias decisiones."
+          },
+          {
+            "id": "dart-m402",
+            "title": "Monorepo con límites reales",
+            "detail": "Organiza varios paquetes de forma que la arquitectura la imponga el compilador y no la disciplina. Mide el efecto en tiempos de build y en conflictos de merge."
+          },
+          {
+            "id": "dart-m403",
+            "title": "Rescata código heredado",
+            "detail": "Coge una base sin tests y mejórala de forma incremental, sin parar las entregas y sin proponer una reescritura. Es el escenario más común y el que peor se maneja."
+          },
+          {
+            "id": "dart-m404",
+            "title": "Convierte criterio en automatismo",
+            "detail": "Escribe reglas de lint propias con custom_lint para algo que repites en cada revisión. Que el estándar deje de depender de que tú estés presente."
+          },
+          {
+            "id": "dart-m405",
+            "title": "Documenta una decisión difícil",
+            "detail": "Un ADR con opciones descartadas, criterios y consecuencias negativas explícitas. Si solo enumera ventajas, no es un análisis."
+          },
+          {
+            "id": "dart-m406",
+            "title": "Contribuye al ecosistema",
+            "detail": "Un PR aceptado en el SDK de Dart o en un paquete relevante. Pasar por la revisión de gente que lleva años en ese código enseña un nivel de rigor difícil de conseguir de otra forma."
+          },
+          {
+            "id": "dart-m407",
+            "title": "Enseña",
+            "detail": "Da una charla interna, escribe una guía o acompaña a alguien durante meses. Explicar bien obliga a entender de verdad, y multiplica tu criterio por el tamaño del equipo."
+          }
+        ],
+        "resources": [
+          {
+            "title": "Dart API design guidelines",
+            "url": "https://dart.dev/effective-dart/design",
+            "kind": "docs"
+          },
+          {
+            "title": "custom_lint",
+            "url": "https://pub.dev/packages/custom_lint",
+            "kind": "repo"
+          },
+          {
+            "title": "Working Effectively with Legacy Code — Michael Feathers",
+            "url": "https://www.oreilly.com/library/view/working-effectively-with/0131177052/",
+            "kind": "book"
+          },
+          {
+            "title": "A Philosophy of Software Design — John Ousterhout",
+            "url": "https://web.stanford.edu/~ouster/cgi-bin/book.php",
+            "kind": "book"
+          },
+          {
+            "title": "Dart SDK contributing guide",
+            "url": "https://github.com/dart-lang/sdk/blob/main/CONTRIBUTING.md",
+            "kind": "repo"
+          }
+        ],
+        "readinessSignals": [
+          "Tu impacto se mide en trabajo que no escribiste tú.",
+          "Sabes qué decisiones merecen análisis y cuáles se toman en cinco minutos.",
+          "Explicas un compromiso técnico a alguien que no programa.",
+          "Cambias de opinión con datos nuevos sin que te cueste nada."
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,1524 @@
+{
+  "schemaVersion": 1,
+  "technologyId": "flutter",
+  "name": "Flutter",
+  "questions": [
+    {
+      "id": "flutter-q001",
+      "level": "junior",
+      "topic": "Widgets",
+      "tags": [
+        "widgets",
+        "estado"
+      ],
+      "prompt": "¿Cuál es la diferencia entre StatelessWidget y StatefulWidget?",
+      "answer": "Un `StatelessWidget` describe una parte de la UI que solo depende de su configuración (sus campos `final`) y del `BuildContext`. Si nada de eso cambia, su `build` produce siempre lo mismo.\n\nUn `StatefulWidget` necesita datos mutables que viven **más que un solo build**. Por eso se parte en dos objetos: el widget (inmutable, se recrea en cada rebuild del padre) y un `State` que Flutter conserva entre rebuilds mientras el elemento siga montado. Llamar a `setState` marca ese elemento como sucio y programa un nuevo `build`.\n\nLa regla práctica: usa `StatefulWidget` solo si necesitas conservar algo entre frames (una animación, un controlador, un flag de carga). Si el dato viene de fuera, mantenlo fuera.",
+      "rubric": {
+        "junior": "Dice que uno guarda estado y el otro no, y menciona setState.",
+        "mid": "Explica que el State sobrevive a los rebuilds porque es un objeto aparte, y que setState marca el elemento como sucio en vez de repintar directamente.",
+        "senior": "Habla del coste: un StatefulWidget mal colocado amplía el subárbol que se reconstruye. Menciona que el estado debería vivir lo más abajo posible en el árbol, y que hoy muchas cosas que antes pedían State se resuelven con un gestor de estado externo o con hooks."
+      },
+      "followUps": [
+        "¿Por qué el estado no vive dentro del propio StatefulWidget?",
+        "¿Qué pasa si llamas a setState después de dispose?"
+      ]
+    },
+    {
+      "id": "flutter-q002",
+      "level": "junior",
+      "topic": "Widgets",
+      "tags": [
+        "build",
+        "ciclo de vida"
+      ],
+      "prompt": "¿Qué hace exactamente setState y por qué no basta con mutar una variable?",
+      "answer": "`setState` hace dos cosas: ejecuta el callback que le pasas (donde tú mutas el estado) y después llama a `markNeedsBuild()` sobre el `Element` asociado. Eso lo añade a la lista de elementos sucios; en el siguiente frame, el `BuildOwner` recorre esa lista y vuelve a llamar a `build`.\n\nMutar la variable a secas cambia el dato pero nadie se entera: Flutter no observa tus campos, no hay reactividad mágica. El árbol se quedaría pintado con el valor viejo hasta que algo más provocara un rebuild, lo que produce bugs intermitentes difíciles de reproducir.\n\nEl callback en sí es una convención de legibilidad: lo importante es que la mutación ocurra *antes* del rebuild.",
+      "rubric": {
+        "junior": "Dice que setState avisa a Flutter de que hay que redibujar.",
+        "mid": "Menciona markNeedsBuild, la lista de elementos sucios y que el rebuild ocurre en el siguiente frame, no de forma síncrona.",
+        "senior": "Señala que el callback es opcional en la práctica, que llamarlo con trabajo pesado dentro bloquea el hilo de UI, y que un setState en la raíz de una pantalla es un smell de que el estado está demasiado arriba."
+      },
+      "followUps": [
+        "¿setState es síncrono o asíncrono?",
+        "¿Qué ocurre si llamas a setState dentro de build?"
+      ]
+    },
+    {
+      "id": "flutter-q003",
+      "level": "junior",
+      "topic": "Widgets",
+      "tags": [
+        "const",
+        "rendimiento"
+      ],
+      "prompt": "¿Por qué se recomienda usar constructores const en los widgets?",
+      "answer": "Un widget `const` se canoniza en tiempo de compilación: todas las apariciones con los mismos argumentos son **la misma instancia**. Cuando el padre se reconstruye, Flutter compara el widget nuevo con el viejo en `Element.update`; si son idénticos por identidad (`identical(old, new)`), puede saltarse por completo la actualización de ese subárbol.\n\nEl efecto es doble: menos asignaciones de memoria (menos presión sobre el GC) y menos trabajo de reconciliación. En listas largas y en widgets que se reconstruyen muchas veces por segundo la diferencia es medible.\n\nEs gratis: si el analizador te deja poner `const`, ponlo. La regla `prefer_const_constructors` lo automatiza.",
+      "rubric": {
+        "junior": "Dice que es más eficiente y que el analizador lo sugiere.",
+        "mid": "Explica la canonización y que Flutter puede saltarse el rebuild del subárbol al detectar la misma instancia.",
+        "senior": "Matiza que el beneficio real está en cortar la propagación del rebuild, no en ahorrar el `new`; y que un const mal puesto no es posible, pero un widget que *podría* ser const y no lo es suele delatar que se está pasando un parámetro innecesario."
+      },
+      "followUps": [
+        "¿Qué impide que un widget sea const?",
+        "¿Qué diferencia hay entre const y final aquí?"
+      ]
+    },
+    {
+      "id": "flutter-q004",
+      "level": "junior",
+      "topic": "Layout",
+      "tags": [
+        "layout",
+        "constraints"
+      ],
+      "prompt": "Explica la regla \"constraints go down, sizes go up, parent sets position\".",
+      "answer": "Es el resumen del algoritmo de layout de Flutter, que es una única pasada descendente-ascendente:\n\n1. **Las restricciones bajan**: el padre le pasa a cada hijo un `BoxConstraints` con anchos y altos mínimos y máximos.\n2. **Los tamaños suben**: el hijo elige su tamaño *dentro* de esas restricciones y se lo devuelve al padre.\n3. **El padre coloca**: el padre decide en qué offset queda cada hijo, porque es el único que ve a todos sus hijos a la vez.\n\nLa consecuencia importante es que un widget **no puede saber su posición en pantalla** durante su propio layout, y no puede elegir un tamaño que su padre no le permita. De ahí vienen los errores clásicos de \"unbounded height\" y los `RenderFlex overflowed`.",
+      "rubric": {
+        "junior": "Repite los tres pasos correctamente.",
+        "mid": "Deduce por qué un Column dentro de otro scroll da \"unbounded constraints\" y cómo lo arreglan Expanded, Flexible o shrinkWrap.",
+        "senior": "Explica que es una sola pasada O(n) por diseño (a diferencia del layout en varias pasadas de la web), qué lo rompe (`IntrinsicHeight`, que fuerza una pasada extra y es O(n²)) y cuándo merece la pena bajar a un CustomMultiChildLayout o a un RenderBox propio."
+      },
+      "followUps": [
+        "¿Por qué IntrinsicHeight es caro?",
+        "¿Qué son constraints tight y loose?"
+      ]
+    },
+    {
+      "id": "flutter-q005",
+      "level": "junior",
+      "topic": "Layout",
+      "tags": [
+        "layout",
+        "flex"
+      ],
+      "prompt": "¿Qué diferencia hay entre Expanded y Flexible?",
+      "answer": "Los dos reparten el espacio sobrante de un `Row` o `Column` según su `flex`. La diferencia está en el `fit`:\n\n- `Expanded` es `Flexible(fit: FlexFit.tight)`: **obliga** al hijo a ocupar todo el espacio asignado.\n- `Flexible` por defecto usa `FlexFit.loose`: le ofrece ese espacio como máximo, pero el hijo puede quedarse más pequeño.\n\nEjemplo: un `Text` corto dentro de `Expanded` ocupa toda la columna (y si le pones fondo, se ve); dentro de `Flexible` ocupa solo lo que necesita. Para repartir a partes iguales, `Expanded`. Para \"que no se pase, pero que encoja si puede\", `Flexible`.",
+      "rubric": {
+        "junior": "Dice que Expanded llena el espacio y Flexible no necesariamente.",
+        "mid": "Nombra FlexFit.tight vs loose y sabe que Expanded es un Flexible preconfigurado.",
+        "senior": "Relaciona ambos con el algoritmo del RenderFlex: primero se miden los hijos no flexibles, el sobrante se reparte por flex, y los tight reciben restricciones tight. Menciona que envolver en Flexible es la solución correcta al overflow de un Text largo, no reducir el fontSize."
+      },
+      "followUps": [
+        "¿Qué hace mainAxisSize: MainAxisSize.min?",
+        "¿Por qué un Row con un Text largo desborda?"
+      ]
+    },
+    {
+      "id": "flutter-q006",
+      "level": "junior",
+      "topic": "Layout",
+      "tags": [
+        "layout",
+        "errores"
+      ],
+      "prompt": "Te sale \"RenderBox was not laid out\" o un overflow amarillo y negro. ¿Cómo lo diagnosticas?",
+      "answer": "Casi siempre es un problema de restricciones sin acotar. El patrón típico: un widget que quiere crecer infinito (un `ListView`, un `Column`) dentro de otro que le da restricciones infinitas en el mismo eje (otro scroll, un `Row` sin `Expanded`).\n\nProceso:\n1. Lee el error: Flutter dice qué RenderObject falló y suele nombrar el eje.\n2. Abre el **Widget Inspector** y mira el layout explorer: enseña las constraints reales de cada nodo.\n3. Pregúntate quién debe decidir el tamaño. Si es el padre, envuelve en `Expanded`/`SizedBox`. Si es el hijo, usa `shrinkWrap: true` (con cuidado: mide todos los hijos) o `mainAxisSize: min`.\n\nLos culpables recurrentes: `ListView` dentro de `Column`, `Row` con `Text` largo, `TextField` dentro de `Row` sin `Expanded`.",
+      "rubric": {
+        "junior": "Reconoce que es un problema de tamaños y menciona Expanded o SizedBox.",
+        "mid": "Distingue restricciones acotadas de no acotadas, y sabe cuándo aplica shrinkWrap frente a Expanded.",
+        "senior": "Explica por qué shrinkWrap es una trampa de rendimiento (mide todos los hijos, pierde la virtualización), y propone alternativas como CustomScrollView con slivers cuando hay listas anidadas."
+      },
+      "followUps": [
+        "¿Por qué shrinkWrap puede ser mala idea?",
+        "¿Cómo anidas dos listas scrollables?"
+      ]
+    },
+    {
+      "id": "flutter-q007",
+      "level": "junior",
+      "topic": "Widgets",
+      "tags": [
+        "keys"
+      ],
+      "prompt": "¿Para qué sirven las Keys y cuándo las necesitas de verdad?",
+      "answer": "Las `Key` intervienen en la reconciliación: cuando Flutter compara la lista de widgets nueva con la vieja, empareja por posición y por `runtimeType`. Si además hay `Key`, empareja por key.\n\nSolo importan cuando **reordenas, insertas o eliminas widgets con estado en una colección**. Sin keys, al borrar el primer elemento de una lista de `StatefulWidget`, el `State` del segundo se \"hereda\" al primero y ves datos cruzados: el checkbox marcado que se mueve solo.\n\nTipos: `ValueKey` (a partir de un identificador del dominio, lo habitual), `ObjectKey`, `UniqueKey` (fuerza recrear siempre) y `GlobalKey` (permite acceder al State desde fuera; cara, úsala con moderación).",
+      "rubric": {
+        "junior": "Dice que sirven para identificar widgets en listas.",
+        "mid": "Explica el bug concreto del estado cruzado al reordenar y cuál es el tipo de key adecuado.",
+        "senior": "Ubica las keys en el algoritmo de updateChildren del MultiChildRenderObjectElement, advierte de que GlobalKey fuerza desmontar y remontar el subárbol si cambia de sitio, y de que UniqueKey en un build destruye el estado en cada frame."
+      },
+      "followUps": [
+        "¿Qué diferencia hay entre ValueKey y GlobalKey?",
+        "¿Dónde se pone la key: en el widget de fuera o en el de dentro?"
+      ]
+    },
+    {
+      "id": "flutter-q008",
+      "level": "junior",
+      "topic": "Ciclo de vida",
+      "tags": [
+        "state",
+        "ciclo de vida"
+      ],
+      "prompt": "Enumera el ciclo de vida de un State y qué va en cada método.",
+      "answer": "- `createState()`: crea el objeto State. Una vez.\n- `initState()`: primera inicialización. Suscripciones, controladores, primera carga. Aquí **no** puedes usar `InheritedWidget` con `context` de forma segura para dependencias que cambien.\n- `didChangeDependencies()`: se llama tras `initState` y cada vez que cambia un `InheritedWidget` del que dependes. Sitio correcto para leer `Theme.of`, `MediaQuery.of` o un provider si necesitas reaccionar.\n- `build()`: describe la UI. Debe ser puro y barato; se llama muchas veces.\n- `didUpdateWidget(old)`: el padre te pasó una configuración nueva. Compara `widget.x` con `old.x` y resuscríbete si hace falta.\n- `deactivate()`: el elemento sale del árbol (puede volver).\n- `dispose()`: liberación definitiva. Cancela timers, cierra streams, libera controllers.",
+      "rubric": {
+        "junior": "Nombra initState, build y dispose con su propósito.",
+        "mid": "Incluye didUpdateWidget y didChangeDependencies y sabe por qué existen.",
+        "senior": "Explica que deactivate y activate permiten mover un subárbol con GlobalKey sin perder estado, y que el orden dispose → super.dispose importa para no usar recursos ya liberados. Menciona fugas típicas: listeners sin quitar y AnimationController sin dispose."
+      },
+      "followUps": [
+        "¿Por qué no se puede usar context en initState para todo?",
+        "¿Qué pasa si olvidas dispose de un AnimationController?"
+      ]
+    },
+    {
+      "id": "flutter-q009",
+      "level": "junior",
+      "topic": "Widgets",
+      "tags": [
+        "build context"
+      ],
+      "prompt": "¿Qué es el BuildContext exactamente?",
+      "answer": "`BuildContext` es la interfaz del `Element`: el nodo del árbol intermedio que Flutter mantiene entre el árbol de widgets (inmutable, se recrea) y el árbol de render (caro, se conserva).\n\nDe ahí salen sus poderes y sus límites: como el Element conoce su posición en el árbol, el context sirve para **subir** buscando ancestros (`Theme.of(context)`, `Navigator.of(context)`), que internamente es `dependOnInheritedWidgetOfExactType`. Y como cada widget tiene su propio context, usar el context equivocado es la causa del clásico \"No Scaffold widget found\": estás buscando desde un punto del árbol que está *por encima* del Scaffold.\n\nLa solución habitual es un `Builder`, que introduce un nivel más y te da un context hijo.",
+      "rubric": {
+        "junior": "Dice que es la referencia a la posición del widget en el árbol y que sirve para Theme.of o Navigator.of.",
+        "mid": "Identifica BuildContext con Element y explica el error de \"no Scaffold found\" y la solución con Builder.",
+        "senior": "Habla de dependOnInheritedWidgetOfExactType y de que crea una suscripción, del peligro de guardar un context y usarlo tras un await (de ahí `mounted`), y de la diferencia con getElementForInheritedWidgetOfExactType, que no suscribe."
+      },
+      "followUps": [
+        "¿Por qué hay que comprobar mounted después de un await?",
+        "¿Qué hace un Builder que no haga extraer un widget aparte?"
+      ]
+    },
+    {
+      "id": "flutter-q010",
+      "level": "junior",
+      "topic": "Navegación",
+      "tags": [
+        "navegacion",
+        "rutas"
+      ],
+      "prompt": "¿Cómo funciona la navegación en Flutter y qué diferencia hay entre la API imperativa y la declarativa?",
+      "answer": "El `Navigator` mantiene una **pila de Routes**. La API imperativa (`Navigator.push`, `pop`, `pushNamed`) manipula esa pila directamente: es sencilla y suficiente para flujos lineales.\n\nLa API declarativa (Navigator 2.0, y en la práctica paquetes como `go_router`) invierte el control: tú describes la pila entera como función del estado de la app, y el framework calcula las transiciones. Es lo que hace posible el deep linking real, la URL sincronizada en web, el botón atrás del navegador y restaurar el estado tras matar el proceso.\n\nEn proyectos nuevos se usa casi siempre un router declarativo; la API imperativa sigue siendo válida para diálogos y flujos modales.",
+      "rubric": {
+        "junior": "Explica push y pop sobre una pila y sabe pasar argumentos.",
+        "mid": "Distingue las dos APIs y sabe por qué la declarativa es necesaria en web y para deep links.",
+        "senior": "Discute el coste de Navigator 2.0 crudo (RouterDelegate y RouteInformationParser son verbosos), por qué la comunidad se movió a go_router, y cómo modelar rutas anidadas con ShellRoute y guardas de redirección basadas en estado de sesión."
+      },
+      "followUps": [
+        "¿Cómo devuelves un resultado desde una pantalla?",
+        "¿Cómo implementarías un guard de autenticación?"
+      ]
+    },
+    {
+      "id": "flutter-q011",
+      "level": "junior",
+      "topic": "Widgets",
+      "tags": [
+        "listas",
+        "rendimiento"
+      ],
+      "prompt": "¿Cuándo usas ListView() y cuándo ListView.builder()?",
+      "answer": "`ListView(children: [...])` construye **todos** los hijos de golpe. Vale para listas cortas y fijas (un formulario, un menú de ajustes).\n\n`ListView.builder(itemCount:, itemBuilder:)` construye los hijos **bajo demanda** según entran en la ventana visible, y los recicla al salir. Es obligatorio para listas largas o de longitud desconocida: la diferencia entre construir 10.000 widgets y construir los 12 que se ven.\n\nVariantes útiles: `.separated` para insertar separadores, y `CustomScrollView` + slivers cuando necesitas mezclar cabeceras, rejillas y listas en un mismo scroll.",
+      "rubric": {
+        "junior": "Sabe que builder es para listas largas y construye bajo demanda.",
+        "mid": "Menciona el reciclado, itemExtent para acelerar el cálculo de scroll, y el caso de .separated.",
+        "senior": "Explica el cacheExtent, por qué addAutomaticKeepAlives puede arruinar la virtualización, y cuándo bajar a SliverList/SliverChildBuilderDelegate o usar itemExtentBuilder para scroll con saltos precisos."
+      },
+      "followUps": [
+        "¿Qué hace itemExtent y por qué ayuda?",
+        "¿Cómo mantienes el estado de un item al hacer scroll?"
+      ]
+    },
+    {
+      "id": "flutter-q012",
+      "level": "junior",
+      "topic": "Assets y recursos",
+      "tags": [
+        "assets",
+        "imagenes"
+      ],
+      "prompt": "¿Cómo se gestionan los assets y las imágenes con distintas densidades?",
+      "answer": "Los assets se declaran en `pubspec.yaml` bajo `flutter: assets:`. Puedes listar ficheros sueltos o un directorio (con la barra final), que incluye sus ficheros directos pero no los subdirectorios.\n\nPara densidades, Flutter usa una convención de carpetas hermanas: `images/logo.png`, `images/2.0x/logo.png`, `images/3.0x/logo.png`. Declaras solo la ruta base y `AssetImage` resuelve la variante según el `devicePixelRatio`.\n\nPara iconos e ilustraciones simples, casi siempre es mejor SVG (`flutter_svg`) o una fuente de iconos: escalan sin pérdida y pesan mucho menos que tres PNG.",
+      "rubric": {
+        "junior": "Sabe declarar assets en pubspec y cargarlos con Image.asset.",
+        "mid": "Conoce la convención 2.0x/3.0x y la resolución automática por devicePixelRatio.",
+        "senior": "Habla del impacto en el tamaño del bundle, de precacheImage para evitar el parpadeo en la primera aparición, del ImageCache y de cómo se le va de las manos con imágenes grandes si no se usa cacheWidth/cacheHeight."
+      },
+      "followUps": [
+        "¿Qué hace precacheImage?",
+        "¿Cómo evitas que una imagen enorme reviente la memoria?"
+      ]
+    },
+    {
+      "id": "flutter-q013",
+      "level": "junior",
+      "topic": "Widgets",
+      "tags": [
+        "inherited",
+        "acceso a datos"
+      ],
+      "prompt": "¿Qué es un InheritedWidget y por qué es importante aunque no lo escribas tú?",
+      "answer": "Es el mecanismo del framework para **propagar datos hacia abajo en el árbol con acceso O(1)**. Cuando un descendiente llama a `dependOnInheritedWidgetOfExactType<T>()`, el Element consulta un mapa de ancestros inherited que mantiene cada Element, así que no recorre el árbol: lo encuentra directamente.\n\nAdemás registra una **dependencia**: si el InheritedWidget se reconstruye y su `updateShouldNotify(old)` devuelve true, Flutter reconstruye exactamente los widgets suscritos, no todo el subárbol.\n\nEs la base de `Theme`, `MediaQuery`, `Navigator`, `Directionality` y de prácticamente todos los gestores de estado (Provider y Riverpod lo usan por debajo).",
+      "rubric": {
+        "junior": "Dice que sirve para pasar datos hacia abajo sin ir parámetro a parámetro.",
+        "mid": "Explica updateShouldNotify y que solo se reconstruyen los dependientes.",
+        "senior": "Describe el mapa `_inheritedElements` que hace la búsqueda O(1), la diferencia entre dependOn... (suscribe) y getElementFor... (no suscribe), y por qué InheritedModel existe: permite suscribirse a un *aspecto* concreto y evitar rebuilds por cambios irrelevantes."
+      },
+      "followUps": [
+        "¿Qué diferencia hay entre InheritedWidget e InheritedModel?",
+        "¿Por qué Theme.of provoca rebuild al cambiar el tema?"
+      ]
+    },
+    {
+      "id": "flutter-q014",
+      "level": "junior",
+      "topic": "Asincronía",
+      "tags": [
+        "async",
+        "futures"
+      ],
+      "prompt": "¿Qué es un FutureBuilder y qué problema tiene si lo usas mal?",
+      "answer": "`FutureBuilder` escucha un `Future` y reconstruye según el `AsyncSnapshot`: waiting, done con datos, done con error.\n\nEl error clásico es **crear el Future dentro de build**:\n\n```dart\n// mal\nFutureBuilder(future: api.load(), builder: ...)\n```\n\nComo `build` se llama muchas veces, cada rebuild lanza una petición nueva y la UI parpadea o entra en bucle. La solución es crear el Future una vez (en `initState`, en un provider, o memoizado) y pasar esa referencia estable.\n\nEl segundo error es no tratar `snapshot.hasError`: la excepción se traga y el usuario ve un spinner eterno.",
+      "rubric": {
+        "junior": "Sabe usar FutureBuilder y leer connectionState y data.",
+        "mid": "Identifica el bug de crear el Future en build y sabe arreglarlo; trata el caso de error.",
+        "senior": "Argumenta que FutureBuilder mezcla estado de carga con la UI y no cachea nada, por lo que en apps reales se sustituye por un gestor de estado que separe el ciclo de vida del dato del ciclo de vida del widget. Menciona la condición de carrera al cambiar de future sin key."
+      },
+      "followUps": [
+        "¿Por qué falla si creas el Future en build?",
+        "¿Qué diferencia hay con StreamBuilder?"
+      ]
+    },
+    {
+      "id": "flutter-q015",
+      "level": "junior",
+      "topic": "Estilo",
+      "tags": [
+        "theme",
+        "material"
+      ],
+      "prompt": "¿Cómo se gestiona el tema y por qué no deberías poner colores a mano en los widgets?",
+      "answer": "El tema se define en `MaterialApp(theme:, darkTheme:)` y se lee con `Theme.of(context)`, que es un `InheritedWidget`. Con Material 3, lo idiomático es generar un `ColorScheme.fromSeed(seedColor:)`: el framework deriva una paleta completa y accesible, con sus variantes claras y oscuras.\n\nPoner `Color(0xFF3355FF)` suelto en un widget rompe tres cosas: el modo oscuro (no se adapta), la coherencia (nadie sabe cuál es \"el azul bueno\") y el contraste (pierdes los pares `onPrimary`, `onSurface`, que están calculados para ser legibles).\n\nUsa siempre roles semánticos: `colorScheme.primary`, `colorScheme.onSurfaceVariant`, `textTheme.titleMedium`.",
+      "rubric": {
+        "junior": "Sabe definir un ThemeData y leerlo con Theme.of.",
+        "mid": "Usa ColorScheme.fromSeed y roles semánticos, y explica el problema del modo oscuro.",
+        "senior": "Habla de ThemeExtension para tokens propios de la marca, de cómo evitar que Theme.of provoque rebuilds innecesarios en widgets grandes, y de la accesibilidad: ratios de contraste y por qué los pares on* existen."
+      },
+      "followUps": [
+        "¿Qué es un ThemeExtension y cuándo lo usarías?",
+        "¿Cómo soportas tema claro y oscuro sin duplicar código?"
+      ]
+    },
+    {
+      "id": "flutter-q016",
+      "level": "junior",
+      "topic": "Widgets",
+      "tags": [
+        "formularios",
+        "validacion"
+      ],
+      "prompt": "¿Cómo implementas un formulario con validación en Flutter?",
+      "answer": "Con `Form` + `GlobalKey<FormState>` + `TextFormField`. Cada campo lleva un `validator` que devuelve `null` si es válido o el mensaje de error si no. `formKey.currentState!.validate()` los ejecuta todos y devuelve el resultado agregado; `save()` dispara los `onSaved`.\n\nPuntos que se olvidan:\n- `autovalidateMode`: por defecto no valida hasta que llamas a `validate()`. `onUserInteraction` da mejor feedback.\n- Los `TextEditingController` hay que liberarlos en `dispose`.\n- Para validación asíncrona (¿existe este email?) el `validator` no sirve: es síncrono. Hay que gestionar ese estado aparte.",
+      "rubric": {
+        "junior": "Conoce Form, GlobalKey<FormState>, TextFormField y validator.",
+        "mid": "Menciona autovalidateMode, el dispose de los controllers y la diferencia entre validate y save.",
+        "senior": "Explica por qué en formularios grandes conviene sacar el estado del Form a un modelo propio (testeable sin widgets), cómo se resuelve la validación asíncrona, y el manejo de foco y orden de tabulación como requisito de accesibilidad."
+      },
+      "followUps": [
+        "¿Cómo harías una validación que depende del servidor?",
+        "¿TextEditingController o onChanged?"
+      ]
+    },
+    {
+      "id": "flutter-q017",
+      "level": "junior",
+      "topic": "Herramientas",
+      "tags": [
+        "hot reload",
+        "tooling"
+      ],
+      "prompt": "¿Qué diferencia hay entre hot reload y hot restart, y qué cosas no recarga el hot reload?",
+      "answer": "**Hot reload** inyecta el código Dart nuevo en la VM en ejecución y vuelve a construir el árbol de widgets, **conservando el estado**. Es posible porque el JIT de Dart permite reemplazar el cuerpo de los métodos en caliente.\n\n**Hot restart** reinicia la app: recompila y descarta todo el estado, pero no reinstala.\n\nEl hot reload no aplica:\n- Cambios en `main()` o en inicializadores de variables globales y `static final`.\n- Cambios en la jerarquía de tipos: añadir un campo a una clase, cambiar de qué hereda, modificar enums.\n- Código nativo (Android/iOS), cambios en `pubspec.yaml` o en los assets declarados.\n\nY solo funciona en modo debug: en release no hay JIT.",
+      "rubric": {
+        "junior": "Distingue los dos y sabe que uno conserva el estado.",
+        "mid": "Enumera varios casos que exigen restart y sabe que hot reload no existe en release.",
+        "senior": "Explica el porqué: JIT y reemplazo de código en la VM, y que los cambios de forma de clase invalidan las instancias ya creadas. Menciona que un initState con efectos secundarios puede volver a ejecutarse y dar falsos positivos al depurar."
+      },
+      "followUps": [
+        "¿Por qué no hay hot reload en modo release?",
+        "¿Qué diferencia hay entre debug, profile y release?"
+      ]
+    },
+    {
+      "id": "flutter-q018",
+      "level": "mid",
+      "topic": "Gestión de estado",
+      "tags": [
+        "estado",
+        "arquitectura"
+      ],
+      "prompt": "¿Cómo eliges un gestor de estado y qué criterios usas para descartar los demás?",
+      "answer": "No hay ganador universal; hay criterios:\n\n- **Alcance del estado**: si solo lo usa un widget, `setState`. Si lo comparte un subárbol, `InheritedWidget`/Provider. Si es global y con dependencias entre piezas, Riverpod o BLoC.\n- **Testabilidad**: ¿puedo probar la lógica sin montar widgets? Riverpod y BLoC sí; setState no.\n- **Trazabilidad**: BLoC da un log de eventos y estados, valioso en equipos grandes y dominios complejos.\n- **Coste de entrada del equipo**: Provider se entiende en una tarde; BLoC bien hecho exige disciplina.\n- **Ciclo de vida y caché**: ¿necesito invalidar, recargar, cachear por parámetro? Ahí Riverpod destaca.\n\nLa respuesta mala es \"el que uso siempre\". La buena es justificar la elección con el tamaño del equipo y la complejidad del dominio.",
+      "rubric": {
+        "junior": "Nombra dos o tres opciones y dice cuál ha usado.",
+        "mid": "Compara al menos dos con criterios concretos: testabilidad, alcance, curva de aprendizaje.",
+        "senior": "Habla de coste de migración, de que el gestor de estado no debe filtrarse a la capa de dominio, y de cómo aislarlo tras interfaces para que cambiarlo sea local. Menciona que la mayoría de problemas atribuidos al gestor de estado son en realidad problemas de modelado."
+      },
+      "followUps": [
+        "¿Qué problema concreto resuelve Riverpod frente a Provider?",
+        "¿Cuándo es setState la respuesta correcta?"
+      ]
+    },
+    {
+      "id": "flutter-q019",
+      "level": "mid",
+      "topic": "Gestión de estado",
+      "tags": [
+        "provider",
+        "riverpod"
+      ],
+      "prompt": "¿Qué problemas de Provider resuelve Riverpod?",
+      "answer": "Provider resuelve la propagación, pero arrastra tres limitaciones que vienen de estar atado al árbol de widgets:\n\n1. **Depende del BuildContext**: no puedes leer un provider fuera del árbol, y leer el tipo equivocado revienta en runtime (`ProviderNotFoundException`).\n2. **No es seguro en tiempo de compilación**: los providers se identifican por tipo; dos providers del mismo tipo colisionan.\n3. **Composición incómoda**: `ProxyProvider` para dependencias entre providers es verboso y frágil.\n\nRiverpod los declara como variables globales tipadas, así que el compilador te protege, se pueden leer fuera del árbol, se componen con `ref.watch` de forma natural, y añade cosas que en Provider hay que montar a mano: auto-dispose, families (un provider parametrizado y cacheado por argumento) y overrides para test.",
+      "rubric": {
+        "junior": "Dice que Riverpod es \"Provider mejorado\" y no depende del context.",
+        "mid": "Nombra la seguridad en compilación, la independencia del BuildContext y las families.",
+        "senior": "Discute el coste: los providers globales complican razonar sobre el ciclo de vida si no se usa autoDispose, y los overrides en test son potentes pero fáciles de abusar. Menciona la migración a Riverpod 3 y el paso de valueOrNull a value."
+      },
+      "followUps": [
+        "¿Qué es una family y para qué sirve?",
+        "¿Cómo pruebas un provider aislado?"
+      ]
+    },
+    {
+      "id": "flutter-q020",
+      "level": "mid",
+      "topic": "Asincronía",
+      "tags": [
+        "async",
+        "event loop"
+      ],
+      "prompt": "Explica el event loop de Dart y la diferencia entre microtask queue y event queue.",
+      "answer": "Dart es de un solo hilo por isolate. El event loop procesa dos colas con **prioridades distintas**:\n\n- **Microtask queue**: tareas internas, programadas con `scheduleMicrotask` o por la resolución de un `Future` ya completado. Se vacía **entera** antes de tocar la otra cola.\n- **Event queue**: I/O, timers, gestos, mensajes de otros isolates, `Future.delayed`.\n\nEl ciclo es: ejecutar todo el código síncrono → vaciar microtasks → coger **un** evento de la event queue → vaciar microtasks otra vez → repetir.\n\nConsecuencia práctica: un microtask que genera otro microtask **mata el frame**, porque la cola nunca se vacía y la event queue (donde vive el vsync) no llega a ejecutarse. Y `await` de un future ya completado no cede al event loop: solo pasa por la microtask queue.",
+      "rubric": {
+        "junior": "Sabe que Dart es single-threaded y que async no crea hilos.",
+        "mid": "Distingue las dos colas y su prioridad, y sabe que las microtasks se vacían completas.",
+        "senior": "Explica el bloqueo por microtasks recursivos, por qué `await null` cede solo a microtask, y cómo esto interactúa con el pipeline de frames: el trabajo pesado hay que trocearlo o mandarlo a un isolate, porque await no lo hace concurrente."
+      },
+      "followUps": [
+        "¿async hace que el código sea concurrente?",
+        "¿Qué diferencia hay entre Future.delayed(Duration.zero) y scheduleMicrotask?"
+      ]
+    },
+    {
+      "id": "flutter-q021",
+      "level": "mid",
+      "topic": "Asincronía",
+      "tags": [
+        "streams"
+      ],
+      "prompt": "¿Qué diferencia hay entre un single-subscription stream y un broadcast stream?",
+      "answer": "Un **single-subscription** stream admite un solo listener en toda su vida. Guarda los eventos hasta que alguien se suscribe y respeta la contrapresión: si el listener pausa, el productor espera. Es el tipo por defecto de `async*` y de los streams de I/O, porque están pensados para una secuencia que se consume una vez.\n\nUn **broadcast** stream admite N listeners simultáneos, pero **no guarda nada**: lo que se emite antes de que te suscribas, lo pierdes; y no hay contrapresión real. Es el modelo de los eventos de UI.\n\nEl error típico es suscribirse dos veces a un single-subscription (`Bad state: Stream has already been listened to`) y \"arreglarlo\" con `.asBroadcastStream()`, lo que introduce pérdida silenciosa de eventos.",
+      "rubric": {
+        "junior": "Sabe que uno admite un listener y el otro varios.",
+        "mid": "Explica el buffering, la pérdida de eventos en broadcast y el error de doble suscripción.",
+        "senior": "Habla de contrapresión y de por qué broadcast no la soporta, de cuándo conviene un BehaviorSubject (rxdart) o un StreamController con seed para tener último valor, y del riesgo de fugas: toda suscripción necesita su cancel."
+      },
+      "followUps": [
+        "¿Cómo evitas fugas con StreamSubscription?",
+        "¿Qué hace asBroadcastStream y qué te cuesta?"
+      ]
+    },
+    {
+      "id": "flutter-q022",
+      "level": "mid",
+      "topic": "Asincronía",
+      "tags": [
+        "isolates",
+        "rendimiento"
+      ],
+      "prompt": "¿Cuándo usarías un isolate y cómo se comunica con el hilo principal?",
+      "answer": "Cuando tienes trabajo **de CPU** que bloquearía el hilo de UI más de un frame (16 ms a 60 Hz): parsear un JSON grande, procesar una imagen, criptografía, cálculo pesado. `async`/`await` **no** sirve para esto: no crea paralelismo, solo reordena en el mismo hilo.\n\nLos isolates no comparten memoria: se comunican por mensajes a través de `SendPort`/`ReceivePort`, y los objetos se copian (con excepciones como `TransferableTypedData`, que se mueve sin copiar).\n\nEn la práctica se usa `compute()` para un cálculo puntual, o `Isolate.run()` (más moderno y ergonómico). Para un worker persistente, hay que montar el par de puertos a mano.\n\nCoste a tener en cuenta: arrancar un isolate no es gratis y la copia del mensaje es O(tamaño). Para trabajos pequeños sale más caro que hacerlo en línea.",
+      "rubric": {
+        "junior": "Sabe que los isolates dan paralelismo real y menciona compute.",
+        "mid": "Explica que no comparten memoria, que los mensajes se copian, y distingue trabajo de CPU de trabajo de I/O.",
+        "senior": "Cuantifica el coste de arranque y de serialización, menciona Isolate.run frente a compute, los isolate groups que comparten heap de código, y cuándo un worker persistente compensa frente a crear uno por tarea."
+      },
+      "followUps": [
+        "¿async/await usa hilos?",
+        "¿Qué coste tiene pasar un objeto grande entre isolates?"
+      ]
+    },
+    {
+      "id": "flutter-q023",
+      "level": "mid",
+      "topic": "Testing",
+      "tags": [
+        "testing"
+      ],
+      "prompt": "¿Qué tipos de test hay en Flutter y qué cubre cada uno?",
+      "answer": "- **Unit test**: lógica pura de Dart, sin widgets. Rapidísimos (milisegundos). Aquí debería estar la mayor parte de tu lógica de dominio.\n- **Widget test**: monta un árbol de widgets en un entorno simulado con `WidgetTester`. Verifica render, interacción y estado. Rápidos (no hay dispositivo), pero requieren `pumpAndSettle` y entender el reloj falso.\n- **Integration test** (`integration_test`): la app completa en un dispositivo o emulador real. Cubre plugins, navegación end-to-end y rendimiento. Lentos y frágiles: pocos y bien elegidos.\n- **Golden test**: compara el render con una imagen de referencia. Excelente para detectar regresiones visuales; delicado entre plataformas por diferencias de renderizado de fuentes.\n\nLa pirámide sigue aplicando: muchos unit, bastantes widget, muy pocos integration.",
+      "rubric": {
+        "junior": "Distingue unit, widget e integration.",
+        "mid": "Añade golden tests y sabe que los widget tests usan un reloj falso y necesitan pump.",
+        "senior": "Discute la estrategia: qué porcentaje en cada nivel, por qué los goldens se ejecutan solo en CI con una plataforma fija, y cómo diseñar el código (inyección de dependencias, lógica fuera de los widgets) para que la mayoría de bugs se puedan cazar con unit tests."
+      },
+      "followUps": [
+        "¿Por qué pumpAndSettle puede colgarse?",
+        "¿Cómo pruebas un widget que depende de una API?"
+      ]
+    },
+    {
+      "id": "flutter-q024",
+      "level": "mid",
+      "topic": "Testing",
+      "tags": [
+        "testing",
+        "widget test"
+      ],
+      "prompt": "En un widget test, ¿qué diferencia hay entre pump y pumpAndSettle, y por qué a veces se cuelga?",
+      "answer": "`pump()` avanza el reloj falso y construye **un** frame. `pump(duration)` avanza ese tiempo y construye uno.\n\n`pumpAndSettle()` llama a `pump` repetidamente hasta que no quedan frames pendientes (ninguna animación activa), con un timeout de 10 segundos por defecto.\n\nSe cuelga cuando hay algo que **nunca se estabiliza**: un `CircularProgressIndicator` indeterminado, una animación en bucle (`repeat()`), un `Timer.periodic`. `pumpAndSettle` sigue pidiendo frames y nunca llega al reposo, y acaba fallando con timeout.\n\nLa solución es no usar `pumpAndSettle` a ciegas: si sabes que hay un spinner permanente, avanza con `pump(Duration(...))` explícitos hasta el estado que quieres verificar.",
+      "rubric": {
+        "junior": "Sabe que hay que llamar a pump para que se reconstruya la UI.",
+        "mid": "Explica el bucle de pumpAndSettle y que un spinner infinito lo cuelga.",
+        "senior": "Menciona el FakeAsync subyacente, que los timers pendientes hacen fallar el test al terminar, y la práctica de sustituir animaciones indeterminadas por un widget controlable en test para no depender de timeouts."
+      },
+      "followUps": [
+        "¿Qué pasa si queda un Timer vivo al acabar el test?",
+        "¿Cómo pruebas una animación?"
+      ]
+    },
+    {
+      "id": "flutter-q025",
+      "level": "mid",
+      "topic": "Plataforma",
+      "tags": [
+        "platform channels",
+        "nativo"
+      ],
+      "prompt": "¿Cómo se comunica Flutter con código nativo?",
+      "answer": "Por **platform channels**: mensajes asíncronos serializados que cruzan la frontera Dart ↔ nativo.\n\n- `MethodChannel`: llamada tipo RPC. Dart invoca un método con nombre y argumentos; el nativo responde con un resultado o un error. Es el 90% de los casos.\n- `EventChannel`: el nativo emite un stream continuo hacia Dart (sensores, ubicación, estado de la batería).\n- `BasicMessageChannel`: mensajes en crudo con el codec que elijas.\n\nTodo va por el `BinaryMessenger` y se serializa con `StandardMessageCodec`, que solo entiende tipos básicos, listas y mapas: no puedes pasar objetos arbitrarios.\n\nDesde hace unas versiones existe además **Pigeon**, que genera el código de ambos lados a partir de una definición, eliminando los errores de nombres de método mal escritos y de tipos mal casteados. Para C/C++ directo está **FFI**, que no pasa por channels y es mucho más rápido.",
+      "rubric": {
+        "junior": "Nombra MethodChannel y sabe que sirve para llamar a código nativo.",
+        "mid": "Distingue Method/Event/BasicMessage channel y sabe que la comunicación es asíncrona y serializada.",
+        "senior": "Compara channels con FFI en términos de coste por llamada, recomienda Pigeon para eliminar el acoplamiento por strings, y advierte de que los channels no son gratis: llamarlos en un bucle por frame es un antipatrón."
+      },
+      "followUps": [
+        "¿Cuándo usarías FFI en lugar de un MethodChannel?",
+        "¿Qué aporta Pigeon?"
+      ]
+    },
+    {
+      "id": "flutter-q026",
+      "level": "mid",
+      "topic": "Animaciones",
+      "tags": [
+        "animaciones"
+      ],
+      "prompt": "¿Qué diferencia hay entre animaciones implícitas y explícitas?",
+      "answer": "**Implícitas** (`AnimatedContainer`, `AnimatedOpacity`, `AnimatedAlign`, y el genérico `TweenAnimationBuilder`): declaras el valor destino y el widget interpola solo cuando cambia. No gestionas controladores. Ideal para transiciones simples de estado.\n\n**Explícitas** (`AnimationController` + `Tween` + `AnimatedBuilder`/`FadeTransition`...): tú controlas el tiempo. Puedes pausar, invertir, repetir, encadenar, sincronizar varias animaciones y reaccionar al progreso. Requieren un `TickerProvider` (el mixin `SingleTickerProviderStateMixin`) y `dispose` del controlador.\n\nRegla: empieza por implícita; pasa a explícita cuando necesites control temporal o coordinación. El error caro es usar `AnimatedBuilder` envolviendo un subárbol grande en vez de pasar ese subárbol como `child` (que no se reconstruye).",
+      "rubric": {
+        "junior": "Distingue las dos familias y nombra ejemplos.",
+        "mid": "Sabe que las explícitas necesitan AnimationController, vsync y dispose, y cuándo escalar de una a otra.",
+        "senior": "Explica el papel del Ticker y el vsync, por qué el parámetro `child` de AnimatedBuilder evita reconstruir el subárbol en cada frame, y cuándo conviene animar en la capa de render (RepaintBoundary, transformaciones) en vez de reconstruir widgets."
+      },
+      "followUps": [
+        "¿Para qué sirve el parámetro child de AnimatedBuilder?",
+        "¿Qué es un Ticker?"
+      ]
+    },
+    {
+      "id": "flutter-q027",
+      "level": "mid",
+      "topic": "Arquitectura",
+      "tags": [
+        "arquitectura",
+        "capas"
+      ],
+      "prompt": "¿Cómo estructuras un proyecto Flutter mediano y por qué?",
+      "answer": "Lo importante no es la carpeta, es la **dirección de las dependencias**. Tres capas:\n\n- **Domain**: entidades y reglas de negocio. Dart puro, sin imports de Flutter. Es lo que sobrevive a cualquier cambio de framework.\n- **Data**: repositorios, fuentes de datos (API, base local), DTOs y su mapeo a entidades de dominio.\n- **Presentation**: widgets y estado de UI.\n\nLa regla: presentation → domain ← data. El dominio no conoce a nadie.\n\nSobre la organización física, en proyectos medianos funciona mejor **feature-first** (`features/auth/`, `features/catalog/`) que layer-first, porque el trabajo real se hace por funcionalidad y así cada cambio toca una carpeta. Dentro de cada feature, las tres capas.\n\nSeñal de que lo estás haciendo bien: puedes borrar una feature entera sin romper el resto.",
+      "rubric": {
+        "junior": "Propone separar UI, lógica y datos.",
+        "mid": "Define capas con dependencias hacia el dominio y defiende feature-first frente a layer-first.",
+        "senior": "Cuestiona la sobreingeniería: aplicar Clean Architecture completa a una app de cinco pantallas cuesta más de lo que aporta. Habla de límites de módulo verificables (paquetes internos, reglas de import en el analizador) en vez de confiar en la disciplina."
+      },
+      "followUps": [
+        "¿Cuándo es Clean Architecture sobreingeniería?",
+        "¿Cómo impides que alguien importe la capa de datos desde la UI?"
+      ]
+    },
+    {
+      "id": "flutter-q028",
+      "level": "mid",
+      "topic": "Errores",
+      "tags": [
+        "errores",
+        "observabilidad"
+      ],
+      "prompt": "¿Cómo gestionas los errores en una app Flutter en producción?",
+      "answer": "En tres frentes:\n\n1. **Errores del framework**: `FlutterError.onError` captura los que ocurren durante build, layout o paint. Por defecto solo los imprime; en release hay que reenviarlos a tu servicio de crash reporting.\n2. **Errores fuera del framework**: `PlatformDispatcher.instance.onError` recoge los errores asíncronos no capturados (un Future sin catch). Antes se usaba `runZonedGuarded`; hoy la primera opción es preferible.\n3. **Errores esperados del dominio**: no son excepciones, son estados. Un login fallido o un 404 se modelan como resultado (`sealed class Result` con variantes) y se pintan en la UI, no se lanzan.\n\nY en UI, `ErrorWidget.builder` para que un fallo de build no muestre la pantalla roja al usuario final, sino algo digno.",
+      "rubric": {
+        "junior": "Usa try/catch y muestra un mensaje al usuario.",
+        "mid": "Conoce FlutterError.onError y la captura de errores asíncronos, e integra un crash reporter.",
+        "senior": "Distingue errores esperados (modelados como estado con sealed classes) de fallos inesperados, define qué se reporta y qué no para no ahogar el dashboard, y menciona breadcrumbs y datos de contexto para que un crash sea accionable."
+      },
+      "followUps": [
+        "¿Excepciones o un tipo Result?",
+        "¿Qué haces con la pantalla roja en release?"
+      ]
+    },
+    {
+      "id": "flutter-q029",
+      "level": "mid",
+      "topic": "Persistencia",
+      "tags": [
+        "persistencia",
+        "base de datos"
+      ],
+      "prompt": "¿Qué opciones de persistencia local hay y cómo eliges?",
+      "answer": "- **SharedPreferences**: pares clave-valor pequeños (un flag, un token, la última pestaña). No es una base de datos y no está cifrado.\n- **SQLite** (`sqflite`, o `drift` encima): relacional, con consultas, índices y transacciones. La opción por defecto cuando hay entidades relacionadas o consultas no triviales. `drift` añade tipado en compilación y streams reactivos sobre las consultas.\n- **NoSQL embebido** (Hive, Isar, ObjectBox): más rápido para lectura de objetos y sin SQL, a cambio de menos potencia de consulta.\n- **Ficheros**: JSON en disco para cachés simples o exportaciones.\n- **flutter_secure_storage**: para credenciales, respaldado por Keychain y Keystore.\n\nCriterios: ¿necesito consultar y filtrar, o solo leer por clave? ¿necesito migraciones versionadas? ¿el dato es sensible? ¿tiene que funcionar en web (donde SQLite exige WASM)?",
+      "rubric": {
+        "junior": "Conoce SharedPreferences y alguna base local.",
+        "mid": "Elige con criterio entre clave-valor y relacional, y sabe que las credenciales van en almacenamiento seguro.",
+        "senior": "Habla de migraciones de esquema y de su estrategia de prueba, de la reactividad (streams sobre consultas) como forma de evitar invalidaciones manuales, y de las restricciones de cada plataforma, incluido el coste de SQLite en web vía WASM."
+      },
+      "followUps": [
+        "¿Cómo gestionas una migración de esquema?",
+        "¿Dónde guardas un token de sesión?"
+      ]
+    },
+    {
+      "id": "flutter-q030",
+      "level": "mid",
+      "topic": "Rendimiento",
+      "tags": [
+        "rendimiento",
+        "rebuilds"
+      ],
+      "prompt": "Una pantalla va a tirones. ¿Cómo la diagnosticas, paso a paso?",
+      "answer": "Primero: **medir en modo profile**, nunca en debug. Debug tiene asserts y no compila AOT; sus números no significan nada.\n\n1. **DevTools → Performance**: mira el timeline de frames. ¿El pico está en UI (verde) o en Raster (azul)?\n2. Si es **UI**: hay demasiado trabajo en build. Activa \"Track widget rebuilds\" y busca subárboles que se reconstruyen sin necesidad. Causas típicas: estado demasiado arriba, `Theme.of` en un widget enorme, falta de `const`, un `AnimatedBuilder` sin `child`.\n3. Si es **Raster**: el problema es pintar. Sospecha de `Opacity`, `ClipRRect` con antialiasing, sombras, `BackdropFilter` y del uso de `saveLayer`. Activa \"Highlight repaints\" y añade `RepaintBoundary` donde toque.\n4. **Jank al arrancar** o al abrir una pantalla: shader compilation jank; se mitiga con precompilación de shaders o con Impeller, que lo elimina por diseño.\n\nY siempre: cambia una cosa, vuelve a medir.",
+      "rubric": {
+        "junior": "Menciona DevTools y quitar trabajo del build.",
+        "mid": "Distingue UI thread de raster thread y sabe qué causas corresponden a cada uno.",
+        "senior": "Estructura el diagnóstico como medición antes de hipótesis, conoce saveLayer como causa raíz de muchos problemas de raster, sabe cuándo un RepaintBoundary ayuda y cuándo es contraproducente (cada uno cuesta memoria de textura), y menciona Impeller y el jank de compilación de shaders."
+      },
+      "followUps": [
+        "¿Qué es saveLayer y por qué es caro?",
+        "¿Cuándo un RepaintBoundary empeora las cosas?"
+      ]
+    },
+    {
+      "id": "flutter-q031",
+      "level": "mid",
+      "topic": "Rendimiento",
+      "tags": [
+        "rendimiento",
+        "repaint"
+      ],
+      "prompt": "¿Qué es un RepaintBoundary y cuándo lo pondrías?",
+      "answer": "Flutter agrupa el pintado en **layers**. Cuando algo necesita repintarse, se repinta la layer entera. Un `RepaintBoundary` crea una layer nueva, aislando a sus descendientes: lo que hay dentro puede repintarse sin obligar al resto, y lo de fuera tampoco arrastra a lo de dentro.\n\nDónde ayuda: una animación pequeña sobre un fondo estático y caro; un item de lista complejo; un gráfico que se redibuja constantemente junto a UI estática.\n\nCuándo estorba: cada boundary es una textura extra en memoria y un coste de composición. Ponerlos \"por si acaso\" en cada item de una lista larga empeora el consumo. `ListView.builder` ya inserta uno por item automáticamente.\n\nLa forma de decidirlo es empírica: activa `debugRepaintRainbowEnabled` o \"Highlight repaints\" en DevTools y mira qué se está repintando de más.",
+      "rubric": {
+        "junior": "Dice que aísla el repintado de una parte de la UI.",
+        "mid": "Explica el concepto de layer y da un caso concreto donde ayuda.",
+        "senior": "Cuantifica el coste en memoria de textura y composición, advierte del abuso, sabe que ListView ya los añade, y usa herramientas de medición en vez de intuición para colocarlos."
+      },
+      "followUps": [
+        "¿Cómo verificas que un RepaintBoundary sirvió de algo?",
+        "¿Qué diferencia hay entre repaint y relayout?"
+      ]
+    },
+    {
+      "id": "flutter-q032",
+      "level": "mid",
+      "topic": "Navegación",
+      "tags": [
+        "navegacion",
+        "deep links"
+      ],
+      "prompt": "¿Cómo implementarías deep linking y guardas de autenticación?",
+      "answer": "Con un router declarativo (`go_router` es el estándar de facto). El deep link llega como una URL; el router la parsea y construye la pila correspondiente, lo que además te da gratis la URL del navegador en web y el botón atrás.\n\nPara los guards se usa `redirect`: una función que recibe el estado de la ruta y devuelve `null` (déjalo pasar) o la ruta a la que redirigir.\n\nDos detalles que se escapan:\n- El `redirect` debe ser **puro y rápido**: se ejecuta en cada navegación. Nada de llamadas de red ahí; lee un estado de sesión ya resuelto.\n- Hay que guardar la ruta original para volver a ella después del login (`?from=/perfil`), o el usuario acaba en la home tras autenticarse, que es la peor experiencia posible.\n\nEn nativo además hay configuración de plataforma: intent filters y App Links en Android, Associated Domains y Universal Links en iOS.",
+      "rubric": {
+        "junior": "Sabe que go_router existe y define rutas con path.",
+        "mid": "Usa redirect para los guards y conoce la configuración nativa de deep links.",
+        "senior": "Trata el redirect como función pura sobre estado ya resuelto, resuelve el retorno a la ruta original, gestiona el estado de carga inicial (mientras no se sabe si hay sesión) y contempla el caso de enlace a contenido que requiere permisos."
+      },
+      "followUps": [
+        "¿Qué pasa si el estado de sesión aún se está cargando?",
+        "¿Cómo pruebas un deep link?"
+      ]
+    },
+    {
+      "id": "flutter-q033",
+      "level": "mid",
+      "topic": "Accesibilidad",
+      "tags": [
+        "accesibilidad"
+      ],
+      "prompt": "¿Qué haces para que una app Flutter sea accesible?",
+      "answer": "Flutter mantiene un **árbol de semántica** paralelo al de render, que es lo que consumen TalkBack, VoiceOver y las herramientas de accesibilidad del sistema. Las cosas concretas:\n\n- **Etiquetas**: `Semantics(label:)` o el parámetro `semanticLabel` en iconos e imágenes. Un `IconButton` sin tooltip ni label es un botón mudo.\n- **Tamaño de toque**: mínimo 48×48 lógicos. Material lo respeta por defecto; los `GestureDetector` a mano, no.\n- **Contraste**: mínimo 4.5:1 para texto normal. Usar los roles `on*` del ColorScheme ayuda.\n- **Escalado de texto**: probar con el tamaño de fuente del sistema al máximo. Alturas fijas en `Container` es la causa número uno de overflow ahí.\n- **Agrupar y excluir**: `MergeSemantics` para que una tarjeta se lea como una unidad, `ExcludeSemantics` para decoración.\n\nY se puede automatizar parte: `meetsGuideline(textContrastGuideline)` en widget tests.",
+      "rubric": {
+        "junior": "Menciona labels y contraste.",
+        "mid": "Conoce el árbol de semántica, los tamaños mínimos de toque y el escalado de texto.",
+        "senior": "Integra comprobaciones de accesibilidad en los tests automáticos, distingue cuándo agrupar o excluir semántica, y trata la accesibilidad como requisito de diseño y no como repaso final."
+      },
+      "followUps": [
+        "¿Cómo pruebas accesibilidad automáticamente?",
+        "¿Qué rompe el escalado de texto del sistema?"
+      ]
+    },
+    {
+      "id": "flutter-q034",
+      "level": "mid",
+      "topic": "Build y despliegue",
+      "tags": [
+        "build",
+        "ci"
+      ],
+      "prompt": "¿Qué diferencia hay entre los modos debug, profile y release?",
+      "answer": "- **Debug**: compilación **JIT**. Habilita hot reload, asserts, el service protocol y todas las herramientas de depuración. Es notablemente más lento y **no sirve para medir rendimiento**.\n- **Profile**: compilación **AOT**, como release, pero conservando lo mínimo para que DevTools pueda instrumentar (timeline, tracing). Es el modo en el que se mide. No está disponible en emulador, hace falta dispositivo físico.\n- **Release**: AOT, sin asserts, sin herramientas, con tree shaking y ofuscación opcional. Es lo que se publica y el binario más pequeño y rápido.\n\nEn web la distinción cambia: debug usa dartdevc y release compila con dart2js o WASM, con diferencias de comportamiento reales (por ejemplo, la precisión de los enteros).",
+      "rubric": {
+        "junior": "Sabe que release es el de producción y debug el de desarrollo.",
+        "mid": "Explica JIT frente a AOT y que profile es el modo correcto para medir.",
+        "senior": "Menciona el tree shaking y la ofuscación con split-debug-info para poder desimbolizar crashes, las diferencias de semántica numérica en web, y por qué un bug que solo aparece en release suele venir de asserts o de código eliminado por el tree shaker."
+      },
+      "followUps": [
+        "¿Por qué un bug solo aparece en release?",
+        "¿Cómo desimbolizas un crash ofuscado?"
+      ]
+    },
+    {
+      "id": "flutter-q035",
+      "level": "senior",
+      "topic": "Internals",
+      "tags": [
+        "internals",
+        "arboles"
+      ],
+      "prompt": "Explica los tres árboles de Flutter y por qué existen.",
+      "answer": "- **Widget tree**: configuración inmutable y barata. Se recrea entera en cada build; son objetos efímeros, casi descriptores.\n- **Element tree**: el árbol persistente. Cada Element mantiene la identidad de un nodo a lo largo del tiempo, guarda el State si lo hay, la lista de dependencias inherited y el puntero al RenderObject.\n- **Render tree**: los `RenderObject`, que hacen layout, paint y hit testing. Son caros de crear y se mutan en vez de recrearse.\n\nExisten porque hay una tensión: queremos describir la UI de forma declarativa (recrear todo es simple de razonar) pero no podemos permitirnos reconstruir el pipeline de render en cada frame. El Element tree es el adaptador: hace de diff entre un árbol desechable y uno costoso, y decide si actualizar un RenderObject existente (mismo tipo y misma key) o desmontar y crear uno nuevo.",
+      "rubric": {
+        "junior": "Nombra los tres árboles.",
+        "mid": "Explica que el Element persiste entre builds y sostiene el State.",
+        "senior": "Articula el porqué: separar una descripción barata de un pipeline caro, con el Element como capa de reconciliación. Conecta esto con las keys, con el coste real de un rebuild (barato) frente a un relayout o repaint (caro), y con por qué `const` corta la propagación."
+      },
+      "followUps": [
+        "¿Qué ocurre en Element.update?",
+        "¿Por qué un rebuild no implica un repaint?"
+      ]
+    },
+    {
+      "id": "flutter-q036",
+      "level": "senior",
+      "topic": "Internals",
+      "tags": [
+        "render",
+        "frames"
+      ],
+      "prompt": "Describe el pipeline de renderizado de un frame.",
+      "answer": "Al llegar el vsync, el engine pide un frame y se ejecutan en orden:\n\n1. **Animate**: se disparan los tickers y callbacks de transient frames; las animaciones actualizan sus valores.\n2. **Build**: el `BuildOwner` reconstruye los elementos marcados como sucios.\n3. **Layout**: el `PipelineOwner` recorre los RenderObjects con `needsLayout`, aplicando constraints hacia abajo y recogiendo tamaños hacia arriba. Los `RelayoutBoundary` limitan hasta dónde sube la invalidación.\n4. **Paint**: se generan las órdenes de dibujo en una lista de layers (no se pinta píxeles todavía).\n5. **Compositing**: se construye el árbol de layers y se envía al engine.\n6. **Rasterize**: en el **raster thread**, Skia o Impeller convierten esas órdenes en píxeles en la GPU.\n\nTodo lo de 1 a 5 ocurre en el **UI thread**; solo el 6 está en el raster thread. Por eso DevTools separa las dos barras: te dice en cuál de los dos mundos se te va el presupuesto de 16 ms.",
+      "rubric": {
+        "junior": "Sabe que hay build, layout y paint.",
+        "mid": "Ordena las fases correctamente y distingue UI thread de raster thread.",
+        "senior": "Menciona los relayout y repaint boundaries como mecanismo de acotación de la invalidación, sabe que paint solo graba órdenes, y relaciona cada fase con síntomas concretos de jank y con la herramienta que los revela."
+      },
+      "followUps": [
+        "¿Qué es un relayout boundary?",
+        "¿Por qué paint no dibuja píxeles?"
+      ]
+    },
+    {
+      "id": "flutter-q037",
+      "level": "senior",
+      "topic": "Internals",
+      "tags": [
+        "impeller",
+        "engine"
+      ],
+      "prompt": "¿Qué es Impeller y qué problema resolvió respecto a Skia?",
+      "answer": "Impeller es el motor de renderizado propio de Flutter, hoy el predeterminado en iOS y Android.\n\nEl problema que resuelve es el **shader compilation jank**: con Skia, los shaders se compilaban la primera vez que hacía falta un efecto concreto, en mitad de la animación. El resultado era el tirón característico la primera vez que abrías una pantalla o disparabas una transición. Los paliativos (precompilar shaders con un warm-up grabado) eran frágiles y había que mantenerlos.\n\nImpeller **precompila todos sus shaders en tiempo de build**: el conjunto de efectos es cerrado y conocido. Además está diseñado sobre APIs gráficas modernas (Metal y Vulkan) y aprovecha mejor el paralelismo de la GPU.\n\nEl coste de la transición fue real: durante un tiempo hubo diferencias de fidelidad visual y de rendimiento en casos concretos, sobre todo en Android con Vulkan y en dispositivos antiguos que caen al backend de OpenGL.",
+      "rubric": {
+        "junior": "Sabe que es el motor de renderizado nuevo.",
+        "mid": "Identifica el shader jank como el problema y sabe que Impeller precompila shaders.",
+        "senior": "Contextualiza la migración: qué se rompió, cómo se detectan regresiones visuales (golden tests), en qué dispositivos hay fallback y por qué un equipo debe medir en su propia matriz de dispositivos antes de dar por buena la mejora."
+      },
+      "followUps": [
+        "¿Cómo se mitigaba el shader jank antes?",
+        "¿Cómo detectas una regresión visual al cambiar de motor?"
+      ]
+    },
+    {
+      "id": "flutter-q038",
+      "level": "senior",
+      "topic": "Rendimiento",
+      "tags": [
+        "memoria",
+        "fugas"
+      ],
+      "prompt": "¿Cómo detectas y corriges una fuga de memoria en Flutter?",
+      "answer": "Síntoma: el uso de memoria crece al navegar entre pantallas y no baja al volver.\n\nDiagnóstico con **DevTools → Memory**:\n1. Toma un snapshot, navega el flujo sospechoso varias veces, vuelve al punto de partida, fuerza GC y toma otro snapshot.\n2. Compara: busca instancias de tus `State` o controladores que deberían haberse liberado y siguen ahí.\n3. Usa el **path to root** del objeto retenido: te dice **quién lo está referenciando**, que es la información que realmente necesitas.\n\nCausas habituales, casi siempre la misma familia: algo que se suscribe y no se da de baja.\n- `StreamSubscription` sin `cancel()`.\n- `addListener` sin `removeListener`.\n- `AnimationController`, `TextEditingController`, `ScrollController` sin `dispose()`.\n- Un `Timer.periodic` vivo.\n- Una closure que captura el `BuildContext` y se guarda en un singleton.\n\nPrevención: el paquete `leak_tracker` está integrado en los tests de Flutter y detecta objetos no liberados automáticamente.",
+      "rubric": {
+        "junior": "Sabe que hay que hacer dispose de los controllers.",
+        "mid": "Usa DevTools Memory con snapshots comparados y enumera las causas típicas.",
+        "senior": "Usa el path to root para encontrar al retenedor en vez de adivinar, conoce leak_tracker para convertir la detección en algo automático y regresivo, y habla de la diferencia entre una fuga real y una caché legítima que simplemente crece."
+      },
+      "followUps": [
+        "¿Qué es el path to root?",
+        "¿Cómo distingues una fuga de una caché?"
+      ]
+    },
+    {
+      "id": "flutter-q039",
+      "level": "senior",
+      "topic": "Build y despliegue",
+      "tags": [
+        "tamaño",
+        "release"
+      ],
+      "prompt": "El APK pesa demasiado. ¿Cómo reduces el tamaño de la app?",
+      "answer": "Primero **medir**: `flutter build apk --analyze-size` genera un desglose que se abre en DevTools y dice exactamente qué ocupa.\n\nDespués, por orden de retorno:\n1. **App bundles en vez de APK universal**: Play entrega solo la ABI y los recursos del dispositivo. Suele ser la mayor ganancia de un golpe.\n2. **Assets**: casi siempre el mayor culpable. Comprimir imágenes, usar WebP, pasar iconos a SVG o a fuente, eliminar variantes de densidad innecesarias.\n3. **Fuentes**: el tree shaking de iconos ya funciona por defecto; para fuentes de texto, subsetting si solo usas latín.\n4. **Dependencias**: revisar el desglose y cuestionar paquetes grandes que se usan para una función pequeña.\n5. **Código nativo**: `--split-debug-info` saca los símbolos del binario, y `--obfuscate` ayuda algo.\n\nY una decisión de producto: el contenido pesado puede descargarse bajo demanda (deferred components en Android) en vez de ir en la instalación inicial.",
+      "rubric": {
+        "junior": "Menciona comprimir imágenes y quitar dependencias.",
+        "mid": "Conoce --analyze-size, los app bundles y el split por ABI.",
+        "senior": "Ordena las acciones por retorno sobre esfuerzo partiendo de datos, contempla deferred components como decisión de producto y menciona el coste de mantener split-debug-info para poder desimbolizar crashes."
+      },
+      "followUps": [
+        "¿Qué pierdes al ofuscar?",
+        "¿Qué son los deferred components?"
+      ]
+    },
+    {
+      "id": "flutter-q040",
+      "level": "senior",
+      "topic": "Seguridad",
+      "tags": [
+        "seguridad"
+      ],
+      "prompt": "¿Qué consideraciones de seguridad tiene una app Flutter?",
+      "answer": "Punto de partida realista: **el binario está en manos del atacante**. Todo lo que va dentro se puede extraer.\n\n- **Secretos**: no hay forma segura de meter una API key en el cliente. La ofuscación solo sube el coste. Lo correcto es que el secreto viva en el backend, o usar credenciales de corta vida por usuario.\n- **Almacenamiento**: credenciales y tokens en `flutter_secure_storage` (Keychain/Keystore), nunca en SharedPreferences.\n- **Red**: HTTPS siempre; certificate pinning si el modelo de amenaza lo justifica, asumiendo el coste operativo de rotar certificados sin romper clientes antiguos.\n- **Integridad del dispositivo**: detección de root/jailbreak como señal, nunca como barrera.\n- **Fuga por UI**: `FLAG_SECURE` en Android para impedir capturas en pantallas sensibles, y ocultar contenido en el app switcher.\n- **Dependencias**: la cadena de suministro es un vector real; un paquete de pub con permisos amplios ejecuta código en tu build.\n\nY logs: un `print` con el token en release es la filtración más común y más tonta.",
+      "rubric": {
+        "junior": "Dice HTTPS y no guardar contraseñas en claro.",
+        "mid": "Usa almacenamiento seguro, conoce el pinning y sabe que la ofuscación no protege secretos.",
+        "senior": "Razona desde un modelo de amenazas: qué protege cada medida, cuál es su coste operativo, y por qué la respuesta correcta a \"¿dónde guardo la API key?\" suele ser \"en ningún sitio del cliente\". Incluye la cadena de suministro y la higiene de logs."
+      },
+      "followUps": [
+        "¿Dónde guardarías una API key de terceros?",
+        "¿Qué coste operativo tiene el certificate pinning?"
+      ]
+    },
+    {
+      "id": "flutter-q041",
+      "level": "senior",
+      "topic": "Build y despliegue",
+      "tags": [
+        "ci",
+        "devops"
+      ],
+      "prompt": "¿Cómo montarías el CI/CD de un proyecto Flutter?",
+      "answer": "Pipeline en dos niveles.\n\n**En cada pull request** (rápido, < 10 min o la gente deja de mirarlo):\n- `flutter analyze` con `--fatal-infos` para que los avisos no se acumulen.\n- `dart format --set-exit-if-changed`.\n- Tests unitarios y de widget con cobertura.\n- Golden tests, fijando una única plataforma para evitar diferencias de render.\n- Build de verificación, sin firmar.\n\n**En merge a main o al etiquetar**:\n- Build firmado. Las claves y los perfiles de aprovisionamiento, en el gestor de secretos del CI, nunca en el repo.\n- Versionado automático desde el tag.\n- Distribución a internos (TestFlight, Firebase App Distribution o el canal interno de Play).\n- Subida de los símbolos de depuración al crash reporter, o los crashes ofuscados no valdrán nada.\n\nDetalles que ahorran horas: fijar la versión exacta de Flutter (fvm o la acción con versión explícita), cachear `~/.pub-cache` y los artefactos de Gradle, y tener los tests de integración en un job aparte porque son lentos y flaky.",
+      "rubric": {
+        "junior": "Menciona ejecutar los tests automáticamente.",
+        "mid": "Describe un pipeline con análisis, formato, tests, build y distribución, y gestiona la firma con secretos.",
+        "senior": "Separa verificación rápida de release, fija la versión del SDK para builds reproducibles, cachea lo correcto, y trata la subida de símbolos como parte obligatoria del release. Piensa en el tiempo de ciclo del equipo como métrica del pipeline."
+      },
+      "followUps": [
+        "¿Cómo garantizas builds reproducibles?",
+        "¿Dónde guardas los certificados de firma?"
+      ]
+    },
+    {
+      "id": "flutter-q042",
+      "level": "senior",
+      "topic": "Arquitectura",
+      "tags": [
+        "modularizacion",
+        "escala"
+      ],
+      "prompt": "El proyecto tiene 300.000 líneas y 20 desarrolladores. ¿Cómo lo modularizas?",
+      "answer": "El objetivo no es estético: es **reducir el acoplamiento y el tiempo de build**, y permitir que dos equipos trabajen sin pisarse.\n\nEstrategia: paquetes Dart locales dentro de un monorepo, orquestados con `melos` o con pub workspaces.\n\n- `packages/core_*`: utilidades, diseño, red. Sin dependencias del dominio.\n- `packages/feature_*`: una feature completa con sus tres capas. Depende de core y de contratos, nunca de otra feature.\n- `packages/contracts`: interfaces compartidas. Si dos features necesitan hablarse, lo hacen a través de aquí.\n- `app/`: solo composición y wiring.\n\nLo que hace que funcione de verdad:\n- Las dependencias declaradas en `pubspec.yaml` de cada paquete **son** la barrera arquitectónica, verificada por el compilador. No depende de la disciplina de nadie.\n- Tests por paquete, y en CI solo se construye y prueba lo afectado.\n- Un `CODEOWNERS` alineado con los paquetes.\n\nY una advertencia: modularizar antes de tiempo o mal es peor que no hacerlo. Los límites se descubren observando qué cambia junto, no dibujando un diagrama al principio.",
+      "rubric": {
+        "junior": "Propone separar en carpetas por feature.",
+        "mid": "Propone paquetes locales con melos y separa core, features y app.",
+        "senior": "Justifica la modularización por tiempo de build, propiedad del código y acoplamiento verificable por el compilador. Advierte contra los límites prematuros y propone descubrirlos por observación del historial de cambios."
+      },
+      "followUps": [
+        "¿Cómo se comunican dos features sin acoplarse?",
+        "¿Cómo evitas dependencias circulares entre paquetes?"
+      ]
+    },
+    {
+      "id": "flutter-q043",
+      "level": "senior",
+      "topic": "Arquitectura",
+      "tags": [
+        "offline",
+        "sincronizacion"
+      ],
+      "prompt": "Diseña una app offline-first. ¿Cómo resuelves la sincronización y los conflictos?",
+      "answer": "Principio: **la base local es la fuente de verdad para la UI**. La red es un detalle que actualiza esa base en segundo plano. La UI nunca espera a la red para pintar.\n\nPiezas:\n1. **Lectura**: la UI se suscribe a consultas locales reactivas. Cuando llega dato nuevo del servidor, se escribe en local y la UI se actualiza sola.\n2. **Escritura**: cola de operaciones pendientes persistida (outbox). Cada mutación se aplica localmente de forma optimista, se encola, y se reintenta con backoff exponencial hasta confirmarse.\n3. **Idempotencia**: cada operación lleva un id de cliente para que un reintento no duplique. Sin esto, el usuario acaba con tres pedidos.\n4. **Conflictos**: hay que elegir política explícitamente y por entidad. *Last-write-wins* con timestamp del servidor es simple y suficiente para muchos casos; para edición colaborativa hacen falta CRDTs o merge en el servidor; para datos críticos (dinero) lo correcto es rechazar y pedir al usuario que resuelva.\n5. **Feedback**: el usuario debe ver el estado de sincronización. Un cambio que se revierte silenciosamente destruye la confianza.\n\nLo difícil no es el código: es decidir la política de conflictos con el negocio, entidad por entidad.",
+      "rubric": {
+        "junior": "Propone cachear los datos y reintentar cuando haya red.",
+        "mid": "Describe base local como fuente de verdad, cola de escrituras y reintentos.",
+        "senior": "Trata la idempotencia como requisito, elige política de conflictos por entidad en función del dominio, y contempla la visibilidad del estado de sincronización como parte del diseño. Reconoce que el problema es de producto tanto como técnico."
+      },
+      "followUps": [
+        "¿Cuándo es insuficiente last-write-wins?",
+        "¿Cómo garantizas idempotencia en los reintentos?"
+      ]
+    },
+    {
+      "id": "flutter-q044",
+      "level": "senior",
+      "topic": "Plataforma",
+      "tags": [
+        "web",
+        "desktop"
+      ],
+      "prompt": "¿Qué cambia al llevar una app Flutter a web y a escritorio?",
+      "answer": "No es \"la misma app en otra pantalla\". Cambian cuatro cosas:\n\n**Web**\n- Arranque: hay que descargar el runtime. El tiempo hasta el primer pintado importa, y CanvasKit pesa más que el renderer HTML aunque sea más fiel.\n- SEO: prácticamente nulo. Si el contenido debe indexarse, Flutter web es la herramienta equivocada.\n- URLs y botón atrás: obligatorio un router declarativo.\n- Sin acceso al sistema de ficheros; el almacenamiento es IndexedDB, y SQLite requiere WASM y cabeceras CORS específicas.\n- La semántica numérica difiere: en JS los enteros son doubles.\n\n**Escritorio**\n- Ventanas redimensionables: el layout tiene que funcionar de 400 px a 4K. Aparecen breakpoints reales.\n- Entrada: teclado, atajos, clic derecho, hover, foco visible. `Shortcuts`, `Actions` y `FocusTraversal` dejan de ser opcionales.\n- Menús nativos, bandeja, múltiples ventanas, drag and drop de ficheros.\n- Distribución y firma: notarización en macOS, MSIX en Windows.\n\nLa trampa recurrente es asumir que el código compartido es el 100%. Lo es la lógica; la capa de interacción no.",
+      "rubric": {
+        "junior": "Menciona que hay que adaptar el layout a pantallas grandes.",
+        "mid": "Conoce las limitaciones de web (SEO, arranque, almacenamiento) y las necesidades de escritorio (teclado, ventanas).",
+        "senior": "Distingue qué código se comparte de verdad, plantea la decisión de si Flutter web es adecuado según el caso de uso, y contempla el coste de distribución y firma en cada plataforma como parte del proyecto."
+      },
+      "followUps": [
+        "¿Cuándo NO usarías Flutter web?",
+        "¿Cómo gestionas atajos de teclado?"
+      ]
+    },
+    {
+      "id": "flutter-q045",
+      "level": "senior",
+      "topic": "Rendimiento",
+      "tags": [
+        "arranque",
+        "startup"
+      ],
+      "prompt": "La app tarda demasiado en arrancar. ¿Qué haces?",
+      "answer": "Separar las tres fases y medir cuál duele:\n\n1. **Antes de Dart**: carga del proceso y del engine. Poco margen; en Android se nota si hay muchos ContentProviders o SDKs de terceros inicializándose en `Application.onCreate`.\n2. **`main()` hasta el primer frame**: aquí está casi siempre el problema. El patrón malo es un `main` con diez `await` en serie: base de datos, remote config, analytics, sesión, feature flags. Cada uno retrasa el primer píxel.\n3. **Primer frame hasta interactivo**: árbol inicial demasiado pesado o datos que se piden en `initState` de la primera pantalla.\n\nQué hacer:\n- **Solo bloquea lo imprescindible** para pintar algo. El resto se inicializa en paralelo o perezosamente después del primer frame.\n- Paralelizar lo que sí es necesario con `Future.wait` en vez de encadenar awaits.\n- Diferir SDKs de terceros: casi ninguno necesita estar listo en el milisegundo cero.\n- Mostrar una primera pantalla real y barata en vez de un spinner sobre fondo vacío.\n\nMedición: `flutter run --trace-startup --profile` da los tiempos de las fases, y `--cache-sksl` era el paliativo del jank de shaders antes de Impeller.",
+      "rubric": {
+        "junior": "Dice que hay que quitar trabajo del arranque.",
+        "mid": "Distingue las fases, paraleliza inicializaciones y difiere lo no esencial.",
+        "senior": "Parte de la medición con trace-startup, cuestiona qué SDKs justifican bloquear el arranque (decisión de producto, no solo técnica), y considera el primer frame útil como métrica en vez del tiempo hasta main."
+      },
+      "followUps": [
+        "¿Qué métrica de arranque reportarías a producto?",
+        "¿Cómo difieres la inicialización de un SDK de analítica?"
+      ]
+    },
+    {
+      "id": "flutter-q046",
+      "level": "senior",
+      "topic": "Internals",
+      "tags": [
+        "render object",
+        "custom"
+      ],
+      "prompt": "¿Cuándo escribirías un RenderObject propio en vez de componer widgets?",
+      "answer": "Casi nunca, y esa es la respuesta correcta como punto de partida: componer widgets existentes cubre el 99% de los casos y es mucho más mantenible.\n\nSe justifica cuando:\n- Necesitas un **algoritmo de layout** que no existe: un flow con reglas propias, un layout que depende de las medidas intrínsecas de los hijos, colocación en varias pasadas.\n- Necesitas **hit testing** no rectangular o personalizado.\n- Hay un cuello de botella real y medido: componer 15 widgets por celda en una lista de miles tiene un coste que un `RenderBox` a medida elimina.\n\nEscala intermedia que se olvida: antes de bajar a `RenderBox`, prueba `CustomPainter` (si solo es dibujo), `CustomMultiChildLayout` (si solo es colocación), o `Flow` (si necesitas transformaciones baratas).\n\nEl coste real de un RenderObject propio es que tienes que implementar bien `performLayout`, `paint`, `hitTest`, `computeDryLayout` y las intrínsecas, y que nadie del equipo va a querer tocarlo. Documéntalo y cúbrelo con tests.",
+      "rubric": {
+        "junior": "Menciona CustomPainter para dibujar.",
+        "mid": "Distingue CustomPainter de un RenderObject y da algún caso de layout propio.",
+        "senior": "Empieza por descartarlo, conoce las alternativas intermedias, justifica la decisión con medición y asume el coste de mantenimiento y documentación. Sabe qué métodos hay que implementar correctamente y por qué computeDryLayout importa."
+      },
+      "followUps": [
+        "¿Qué es computeDryLayout y por qué existe?",
+        "¿Cuándo basta con un CustomPainter?"
+      ]
+    },
+    {
+      "id": "flutter-q047",
+      "level": "senior",
+      "topic": "Calidad",
+      "tags": [
+        "revision",
+        "equipo"
+      ],
+      "prompt": "¿Qué buscas al revisar un pull request de Flutter de otra persona?",
+      "answer": "Por orden de importancia, no de facilidad de detección:\n\n1. **¿Resuelve el problema correcto?** El error más caro es código impecable que resuelve lo que no era.\n2. **Corrección en los bordes**: estados de carga, error y vacío; qué pasa sin red; qué pasa si el usuario toca dos veces; `mounted` tras un `await`.\n3. **Fugas**: todo lo que se suscribe, ¿se da de baja? Todo controlador, ¿tiene su `dispose`?\n4. **Tests**: ¿prueban comportamiento o implementación? Un test que se rompe al renombrar un método privado es un pasivo.\n5. **Modelo de datos**: ¿los estados imposibles son representables? Un `isLoading` junto a un `error` y un `data` nullable permite las ocho combinaciones; una sealed class permite tres.\n6. **Rendimiento** solo si hay motivo: rebuilds evidentes, trabajo pesado en `build`.\n7. **Estilo**: lo mínimo. Eso lo arregla el linter, no una persona.\n\nY sobre la forma: distinguir lo que bloquea de la sugerencia. Un comentario sin esa distinción hace perder tiempo a todo el mundo.",
+      "rubric": {
+        "junior": "Busca errores evidentes y estilo.",
+        "mid": "Revisa casos borde, gestión de recursos y cobertura de tests.",
+        "senior": "Prioriza corrección de diseño y modelado sobre estilo, evalúa la calidad de los tests y no solo su existencia, y cuida la forma de comunicar (bloqueante vs sugerencia) porque la revisión también es una herramienta de equipo."
+      },
+      "followUps": [
+        "¿Cómo modelas estados para hacer imposibles los estados imposibles?",
+        "¿Qué distingue un buen test de uno frágil?"
+      ]
+    },
+    {
+      "id": "flutter-q048",
+      "level": "senior",
+      "topic": "Arquitectura",
+      "tags": [
+        "migracion",
+        "legado"
+      ],
+      "prompt": "Te piden migrar una app nativa grande a Flutter sin parar el desarrollo. ¿Cómo lo planteas?",
+      "answer": "Migración incremental con **add-to-app**: Flutter se integra como un módulo dentro de la app nativa existente, y se migra pantalla a pantalla.\n\nPlan:\n1. **Elegir la primera pantalla con criterio**: autocontenida, con poca integración nativa, con tráfico suficiente para aprender pero no crítica. Suele ser un detalle o un formulario, no la home.\n2. **Resolver la frontera**: navegación entre mundos, sesión compartida, estado compartido. Es donde está la complejidad real, no en los widgets.\n3. **Medir**: tamaño del binario (el engine añade unos megas de una vez), memoria (dos runtimes vivos), y tiempo de arranque del primer Flutter.\n4. **Decidir el orden** por valor: primero lo que se toca a menudo y duele mantener por duplicado.\n\nLo que hay que decir en voz alta desde el principio:\n- Durante la transición se mantienen **tres** bases de código, no dos. Es el periodo más caro y hay que acortarlo.\n- Add-to-app tiene fricción real: herramientas, depuración y hot reload son peores que en un proyecto Flutter puro.\n- Si no hay compromiso de terminar la migración, es mejor no empezarla. Una migración a medias indefinida es el peor resultado posible.",
+      "rubric": {
+        "junior": "Propone reescribir la app en Flutter.",
+        "mid": "Conoce add-to-app y propone migrar pantalla a pantalla.",
+        "senior": "Plantea criterios para elegir el orden, identifica la frontera como el trabajo real, cuantifica los costes (binario, memoria, arranque) y aborda el riesgo organizativo de una migración que se queda a medias."
+      },
+      "followUps": [
+        "¿Cómo compartes la sesión entre el mundo nativo y Flutter?",
+        "¿Qué métricas usarías para decidir si seguir o parar?"
+      ]
+    },
+    {
+      "id": "flutter-q049",
+      "level": "senior",
+      "topic": "Calidad",
+      "tags": [
+        "dependencias",
+        "riesgo"
+      ],
+      "prompt": "¿Cómo decides si añades una dependencia de pub.dev a un proyecto serio?",
+      "answer": "Una dependencia es una deuda a largo plazo que alguien más controla. Criterios:\n\n- **¿Cuánto código me ahorra de verdad?** Si son 200 líneas que entiendo, escribirlas suele salir más barato que mantener la dependencia cinco años.\n- **Mantenimiento**: frecuencia de commits, issues abiertos sin respuesta, si hay un bus factor de 1, si soporta la versión actual del SDK.\n- **Superficie**: ¿cuántas dependencias transitivas arrastra? ¿Toca código nativo en las tres plataformas?\n- **Coste de salida**: si mañana se abandona, ¿cuánto cuesta sustituirla? Esto se reduce **envolviendo la dependencia tras una interfaz propia**, de modo que su API no se filtre por todo el código.\n- **Licencia**: compatible con la del proyecto y con la distribución prevista.\n- **Seguridad**: es código que se ejecuta en tu build y en tu app.\n\nY una asimetría que conviene tener presente: añadir una dependencia cuesta cinco minutos; quitarla, semanas.",
+      "rubric": {
+        "junior": "Mira las estrellas, los likes y si está mantenida.",
+        "mid": "Evalúa mantenimiento, dependencias transitivas y licencia.",
+        "senior": "Razona sobre el coste de salida y lo mitiga con una capa de abstracción propia, considera la cadena de suministro como riesgo de seguridad, y aplica la asimetría entre el coste de entrada y el de retirada al decidir."
+      },
+      "followUps": [
+        "¿Cómo aíslas una dependencia para poder sustituirla?",
+        "¿Qué harías si un paquete crítico se abandona?"
+      ]
+    },
+    {
+      "id": "flutter-q050",
+      "level": "senior",
+      "topic": "Calidad",
+      "tags": [
+        "mentoria",
+        "liderazgo"
+      ],
+      "prompt": "Un junior de tu equipo entrega código que funciona pero está mal estructurado. ¿Qué haces?",
+      "answer": "Distinguir dos cosas que se confunden: **desbloquear la entrega** y **desarrollar a la persona**. Son objetivos distintos y a veces compiten.\n\nEn el momento:\n- Separar lo que bloquea (un bug, una fuga, un fallo de seguridad) de lo que es mejorable. Bloquear por estilo es caro y desmotiva.\n- Preguntar antes de afirmar: \"¿qué pasaría aquí si la petición falla?\" enseña más que \"esto está mal\". Y a veces descubres que había una razón que no viste.\n- Dar **una o dos** cosas importantes, no quince. Una revisión con treinta comentarios no se aprende, se obedece.\n\nA medio plazo, si el patrón se repite, el problema no es de la persona:\n- ¿Hay una convención escrita, o cada uno adivina? Si no está escrita, no existe.\n- ¿Puede el linter o el CI detectar esto automáticamente? Todo lo automatizable no debería estar en una revisión humana.\n- ¿Hay ejemplos de referencia en el propio repo?\n- Programación en pareja sobre el siguiente caso similar: enseña el proceso de decisión, no solo el resultado.\n\nY una comprobación honesta: si en un equipo varias personas cometen el mismo error, es un fallo del sistema, no de ellas.",
+      "rubric": {
+        "junior": "Le dice qué está mal y cómo arreglarlo.",
+        "mid": "Da feedback constructivo, explica el porqué y prioriza lo importante.",
+        "senior": "Separa desbloquear de enseñar, limita el volumen de feedback para que sea asimilable, y sube un nivel: convierte el conocimiento tácito en convenciones escritas y en automatismos del CI. Asume el error repetido como señal de un fallo del sistema, no de la persona."
+      },
+      "followUps": [
+        "¿Cómo documentas una convención para que se siga de verdad?",
+        "¿Qué automatizarías del proceso de revisión?"
+      ]
+    }
+  ],
+  "exercises": [
+    {
+      "id": "flutter-e001",
+      "title": "Contador con persistencia y estados de carga",
+      "difficulty": "easy",
+      "topic": "Estado y persistencia",
+      "statement": "Construye un contador que sobreviva al cierre de la app. Requisitos: mientras se lee el valor guardado debe verse un estado de carga; si la lectura falla, un estado de error con botón de reintentar; los botones de + y − deben deshabilitarse mientras se persiste.\n\nEl objetivo no es el contador: es que **los cuatro estados sean explícitos** y que no exista ninguna combinación imposible.",
+      "hints": [
+        "¿Cuántas combinaciones permite tener `bool isLoading`, `String? error` e `int? value` como campos sueltos?",
+        "Una sealed class con variantes Loading, Error y Ready hace que el compilador te obligue a tratar cada caso.",
+        "La escritura optimista (actualizar la UI antes de que confirme el disco) mejora la sensación, pero necesita un plan para revertir si falla."
+      ],
+      "approach": "El error de diseño clásico es modelar el estado con banderas sueltas: `isLoading`, `error`, `value`. Tres campos independientes permiten 2×2×2 = 8 combinaciones, de las cuales solo 3 tienen sentido. Las otras 5 son bugs esperando a pasar (cargando y con error a la vez, listo pero con value nulo).\n\nLa alternativa es hacer que **los estados imposibles no se puedan representar**. Una `sealed class` con exactamente las variantes válidas convierte el problema de runtime en un problema de compilación: un `switch` exhaustivo sobre un sealed no compila si te dejas un caso.\n\nPara la persistencia, dos políticas:\n- **Pesimista**: escribir, esperar confirmación, actualizar la UI. Sencilla y siempre coherente, pero se nota el retardo.\n- **Optimista**: actualizar la UI ya, escribir en segundo plano, revertir si falla. Mejor percepción, más código, y hay que decidir qué ve el usuario en la reversión.\n\nPara un contador, pesimista con los botones deshabilitados es honesto y suficiente.",
+      "solutionSketch": "```dart\nsealed class CounterState {\n  const CounterState();\n}\n\nclass CounterLoading extends CounterState {\n  const CounterLoading();\n}\n\nclass CounterError extends CounterState {\n  const CounterError(this.message);\n  final String message;\n}\n\nclass CounterReady extends CounterState {\n  const CounterReady(this.value, {this.saving = false});\n  final int value;\n  final bool saving;\n}\n\n// En la UI, el switch es exhaustivo: si añades una variante,\n// el compilador te obliga a tratarla aquí.\nWidget build(BuildContext context) => switch (state) {\n  CounterLoading() => const CircularProgressIndicator(),\n  CounterError(:final message) => ErrorView(message, onRetry: load),\n  CounterReady(:final value, :final saving) => CounterView(\n      value: value,\n      onIncrement: saving ? null : increment,\n    ),\n};\n```",
+      "complexity": "O(1) por operación. El coste real es la latencia de disco, que es lo que el estado `saving` hace visible.",
+      "pitfalls": [
+        "Usar `int? value` con `isLoading`: permite el estado \"listo pero sin valor\", que acabará en un `!` que revienta.",
+        "No deshabilitar los botones durante la escritura: dos toques rápidos producen dos escrituras concurrentes y el último en llegar gana, que puede no ser el último pulsado.",
+        "Olvidar el caso de error en la lectura inicial: la app se queda en el spinner para siempre."
+      ]
+    },
+    {
+      "id": "flutter-e002",
+      "title": "Buscador con debounce y cancelación",
+      "difficulty": "medium",
+      "topic": "Asincronía",
+      "statement": "Implementa un campo de búsqueda que consulte una API. Requisitos: no lanzar una petición por cada tecla; si el usuario sigue escribiendo, la respuesta de una consulta antigua **no puede** sobrescribir a una más reciente; y mostrar correctamente los estados de carga, vacío y error.",
+      "hints": [
+        "El debounce se hace con un Timer que se cancela y se reinicia en cada pulsación.",
+        "El debounce no basta: dos peticiones ya lanzadas pueden volver en orden inverso.",
+        "Guarda un identificador de la petición vigente y descarta cualquier respuesta cuyo identificador no coincida."
+      ],
+      "approach": "Aquí hay **dos problemas distintos** que se confunden a menudo.\n\nEl primero es el volumen: escribir \"flutter\" son siete peticiones. Se resuelve con **debounce**: esperar a que el usuario pare de escribir (unos 300 ms) antes de lanzar nada. Un `Timer` que se cancela y se recrea en cada `onChanged`.\n\nEl segundo, y el que de verdad distingue una implementación correcta, es la **condición de carrera**. Aun con debounce, si el usuario escribe \"fl\", espera, y luego \"flutter\", hay dos peticiones en vuelo. Si la de \"fl\" tarda más y llega después, el usuario ve resultados de \"fl\" mientras el campo pone \"flutter\". Es un bug intermitente, dependiente de la red, y por eso costoso de reproducir.\n\nLa solución es un **token de generación**: cada petición lleva un número incremental; al llegar la respuesta, se compara con el actual y, si no coincide, se descarta. La alternativa idiomática con streams es `switchMap`, que cancela la suscripción anterior al llegar un valor nuevo.\n\nY no olvides el tercer detalle: cancelar el timer en `dispose`, o tendrás un callback disparándose sobre un widget desmontado.",
+      "solutionSketch": "```dart\nTimer? _debounce;\nint _generation = 0;\n\nvoid onQueryChanged(String query) {\n  _debounce?.cancel();\n  _debounce = Timer(const Duration(milliseconds: 300), () {\n    _search(query);\n  });\n}\n\nFuture<void> _search(String query) async {\n  final generation = ++_generation;\n  emit(const SearchLoading());\n  try {\n    final results = await api.search(query);\n    // Llegó tarde: ya hay una búsqueda más reciente en marcha.\n    if (generation != _generation) return;\n    emit(results.isEmpty ? const SearchEmpty() : SearchResults(results));\n  } catch (error) {\n    if (generation != _generation) return;\n    emit(SearchError('$error'));\n  }\n}\n\n@override\nvoid dispose() {\n  _debounce?.cancel();\n  super.dispose();\n}\n```",
+      "complexity": "O(1) por pulsación. Reduce las peticiones de N (una por tecla) a aproximadamente una por pausa de escritura.",
+      "pitfalls": [
+        "Resolver solo el debounce y dar el problema por cerrado: la carrera sigue ahí y aparece en redes lentas.",
+        "No cancelar el Timer en dispose: excepción por setState sobre un widget desmontado.",
+        "Comparar la respuesta con el texto actual del campo en vez de usar un token: falla si el usuario vuelve a escribir el mismo texto.",
+        "Lanzar la búsqueda con la cadena vacía al borrar todo."
+      ]
+    },
+    {
+      "id": "flutter-e003",
+      "title": "Lista infinita con paginación",
+      "difficulty": "medium",
+      "topic": "Listas y rendimiento",
+      "statement": "Una lista que carga 20 elementos por página y pide la siguiente al acercarse al final. Requisitos: no disparar peticiones duplicadas, mostrar un indicador al final mientras carga, gestionar el error de una página sin perder las anteriores, y soportar pull-to-refresh.",
+      "hints": [
+        "Detecta la proximidad al final desde el itemBuilder o con un ScrollController y un umbral.",
+        "Necesitas un flag de \"ya estoy cargando\" y otro de \"no hay más páginas\".",
+        "El error de la página 3 no debe borrar las páginas 1 y 2."
+      ],
+      "approach": "El estado de una lista paginada no es una lista: es una lista **más** los metadatos de la paginación. Como mínimo: los elementos acumulados, la página siguiente, si hay una carga en curso, si se ha llegado al final y el error de la última página.\n\nEl disparo se puede hacer de dos formas. Con un `ScrollController` y un umbral en píxeles es lo habitual, pero acopla la lógica al scroll físico. Más limpio es usar el propio `itemBuilder`: cuando construye un índice cercano al final del array, pide la siguiente página. Funciona igual y no requiere controlador.\n\nEl guard contra duplicados es imprescindible: sin un `isLoading`, el `itemBuilder` se llama varias veces durante un scroll rápido y lanzas tres peticiones para la misma página.\n\nEl error merece un tratamiento cuidadoso: fallar la página 3 no puede vaciar la lista. La UI correcta mantiene los elementos ya cargados y pone una fila de \"reintentar\" al final. Perder el trabajo del usuario por un fallo de red es una de las cosas que más irrita.\n\nY el refresh reinicia todo: elementos vacíos, cursor al principio, banderas a su valor inicial.",
+      "solutionSketch": "```dart\nclass PagedState {\n  const PagedState({\n    this.items = const [],\n    this.nextPage = 0,\n    this.isLoading = false,\n    this.hasMore = true,\n    this.error,\n  });\n\n  final List<Item> items;\n  final int nextPage;\n  final bool isLoading;\n  final bool hasMore;\n  final String? error;\n}\n\nFuture<void> loadNext() async {\n  // El guard: sin esto, un scroll rápido dispara la misma página varias veces.\n  if (state.isLoading || !state.hasMore) return;\n  state = state.copyWith(isLoading: true, error: null);\n  try {\n    final page = await api.fetch(state.nextPage);\n    state = state.copyWith(\n      items: [...state.items, ...page],\n      nextPage: state.nextPage + 1,\n      hasMore: page.length == pageSize,\n      isLoading: false,\n    );\n  } catch (error) {\n    // Se conservan los items ya cargados.\n    state = state.copyWith(isLoading: false, error: '$error');\n  }\n}\n\n// En el builder: al acercarse al final, pide más.\nitemBuilder: (context, index) {\n  if (index >= state.items.length - 5) loadNext();\n  ...\n}\n```",
+      "complexity": "O(1) por página cargada. La memoria crece linealmente con los elementos acumulados: para listas muy largas hay que plantearse descartar los primeros.",
+      "pitfalls": [
+        "Sin guard de isLoading: peticiones duplicadas en cada scroll rápido.",
+        "Vaciar la lista al fallar una página.",
+        "Deducir hasMore comparando con una longitud fija cuando la API devuelve menos elementos por otro motivo.",
+        "No resetear el estado en el pull-to-refresh: los elementos se duplican."
+      ]
+    },
+    {
+      "id": "flutter-e004",
+      "title": "Corregir una fuga de memoria",
+      "difficulty": "medium",
+      "topic": "Ciclo de vida",
+      "statement": "Este widget provoca una fuga y, a veces, una excepción. Encuentra los tres fallos y corrígelos.\n\n```dart\nclass _FeedState extends State<Feed> {\n  List<Post> posts = [];\n\n  @override\n  void initState() {\n    super.initState();\n    widget.repository.stream.listen((post) {\n      setState(() => posts.add(post));\n    });\n    Timer.periodic(const Duration(seconds: 30), (_) => refresh());\n  }\n\n  Future<void> refresh() async {\n    final fresh = await widget.repository.load();\n    setState(() => posts = fresh);\n  }\n}\n```",
+      "hints": [
+        "¿Qué objetos se crean en initState y quién los libera?",
+        "¿Qué pasa si el usuario sale de la pantalla mientras `load()` está en vuelo?",
+        "Falta un método del ciclo de vida por completo."
+      ],
+      "approach": "Los tres fallos son variantes del mismo descuido: **crear recursos con ciclo de vida sin cerrarlos**.\n\n1. **La suscripción al stream** no se guarda, así que no se puede cancelar. Sigue viva tras salir de la pantalla, llamando a `setState` sobre un State desmontado. Cada visita a la pantalla añade otra suscripción: la fuga crece con el uso.\n\n2. **El `Timer.periodic`** tampoco se guarda. Sigue disparándose cada 30 segundos para siempre, haciendo peticiones de red de una pantalla que ya nadie ve. Además mantiene vivo el State entero por la referencia de la closure.\n\n3. **El `await` sin comprobar `mounted`**: si el usuario sale mientras la petición está en vuelo, al volver `setState` lanza `setState() called after dispose()`. Es intermitente y depende de la latencia, por eso pasa los tests y falla en producción.\n\nLa regla general: **todo lo que se suscribe, se cancela; y todo `await` seguido de un `setState` necesita comprobar `mounted` antes**. En equipos, esto se automatiza: el lint `use_build_context_synchronously` y `leak_tracker` en los tests lo cazan sin depender de la memoria de nadie.",
+      "solutionSketch": "```dart\nclass _FeedState extends State<Feed> {\n  List<Post> posts = [];\n  StreamSubscription<Post>? _subscription;\n  Timer? _timer;\n\n  @override\n  void initState() {\n    super.initState();\n    _subscription = widget.repository.stream.listen((post) {\n      setState(() => posts.add(post));\n    });\n    _timer = Timer.periodic(const Duration(seconds: 30), (_) => refresh());\n  }\n\n  Future<void> refresh() async {\n    final fresh = await widget.repository.load();\n    if (!mounted) return; // el usuario pudo salir durante el await\n    setState(() => posts = fresh);\n  }\n\n  @override\n  void dispose() {\n    _subscription?.cancel();\n    _timer?.cancel();\n    super.dispose();\n  }\n}\n```",
+      "complexity": "Sin corregir, el consumo crece linealmente con el número de visitas a la pantalla y nunca se libera.",
+      "pitfalls": [
+        "Cancelar la suscripción pero olvidar el timer: la fuga sigue, más difícil de ver.",
+        "Llamar a super.dispose() antes de liberar los recursos propios.",
+        "Comprobar mounted antes del await en vez de después: no sirve de nada."
+      ]
+    },
+    {
+      "id": "flutter-e005",
+      "title": "Layout responsive de dos paneles",
+      "difficulty": "medium",
+      "topic": "Layout",
+      "statement": "Una pantalla maestro-detalle. En pantalla estrecha, la lista ocupa todo y el detalle se abre como pantalla nueva. En pantalla ancha, lista y detalle conviven lado a lado. Al rotar o redimensionar, el estado de selección no debe perderse.",
+      "hints": [
+        "LayoutBuilder da las restricciones del padre; MediaQuery da el tamaño de la ventana. No son lo mismo.",
+        "El estado de selección debe vivir por encima de los dos modos de presentación.",
+        "Piensa qué pasa con la pila de navegación al pasar de estrecho a ancho con el detalle abierto."
+      ],
+      "approach": "El error de diseño más común es tratar esto como dos pantallas distintas con código duplicado. La estructura correcta separa **qué se muestra** de **cómo se presenta**:\n\n- El estado (`selectedId`) vive en un único sitio, por encima de ambos modos.\n- La lista y el detalle son widgets independientes que no saben nada del modo.\n- Un widget de composición elige la disposición según el ancho disponible.\n\nSobre `LayoutBuilder` frente a `MediaQuery`: `MediaQuery.sizeOf(context)` da el tamaño de la ventana, `LayoutBuilder` da las restricciones reales del hueco donde vives. Si tu pantalla está dentro de un panel, un `Drawer` o una vista dividida, la ventana miente. Por defecto, `LayoutBuilder`.\n\nEl caso que separa una implementación correcta de una aproximada es la **transición entre modos**: si el usuario tiene el detalle abierto como pantalla en modo estrecho y ensancha la ventana, hay que sacar esa ruta de la pila y mostrarla en el panel, o el usuario acaba con un detalle apilado sobre una vista que ya lo muestra. Con el estado de selección centralizado esto es tratable; con la selección viviendo dentro de la ruta, no.\n\nLos breakpoints conviene tomarlos de una guía establecida (Material 3 define compact / medium / expanded) en vez de inventarlos.",
+      "solutionSketch": "```dart\nclass MasterDetail extends StatelessWidget {\n  const MasterDetail({required this.selectedId, required this.onSelect, super.key});\n\n  final String? selectedId;\n  final ValueChanged<String?> onSelect;\n\n  static const _expandedBreakpoint = 840.0; // Material 3: expanded\n\n  @override\n  Widget build(BuildContext context) {\n    return LayoutBuilder(\n      builder: (context, constraints) {\n        final isWide = constraints.maxWidth >= _expandedBreakpoint;\n\n        if (isWide) {\n          return Row(\n            children: [\n              SizedBox(\n                width: 360,\n                child: ItemList(selectedId: selectedId, onSelect: onSelect),\n              ),\n              const VerticalDivider(width: 1),\n              Expanded(\n                child: selectedId == null\n                    ? const EmptyDetail()\n                    : ItemDetail(id: selectedId!),\n              ),\n            ],\n          );\n        }\n\n        // Estrecho: la selección navega en lugar de rellenar un panel.\n        return ItemList(\n          selectedId: null,\n          onSelect: (id) {\n            onSelect(id);\n            Navigator.of(context).push(\n              MaterialPageRoute(builder: (_) => ItemDetail(id: id!)),\n            );\n          },\n        );\n      },\n    );\n  }\n}\n```",
+      "complexity": "O(1) en la decisión de layout. LayoutBuilder introduce una dependencia de las constraints, así que su hijo se reconstruye al cambiar el tamaño: conviene que ese subárbol sea barato.",
+      "pitfalls": [
+        "Duplicar la pantalla en dos widgets que divergen con el tiempo.",
+        "Usar MediaQuery cuando el widget no ocupa toda la ventana.",
+        "No contemplar la transición entre modos con el detalle abierto.",
+        "Breakpoints inventados que no coinciden con ningún dispositivo real."
+      ]
+    },
+    {
+      "id": "flutter-e006",
+      "title": "Optimizar una lista que va a tirones",
+      "difficulty": "hard",
+      "topic": "Rendimiento",
+      "statement": "Una lista de 5.000 elementos va a 40 fps. Cada fila tiene avatar remoto, tres líneas de texto, una sombra y un `ClipRRect`. Diseña el plan de optimización: cómo mides, en qué orden actúas y cómo verificas cada cambio.",
+      "hints": [
+        "Antes de tocar nada: ¿el problema está en el UI thread o en el raster thread?",
+        "La sombra y el recorte apuntan a un lado concreto del pipeline.",
+        "Las imágenes remotas tienen dos costes distintos: la descarga y la decodificación."
+      ],
+      "approach": "Lo primero no es una optimización, es un **método**: medir en modo profile, formular una hipótesis, aplicar un cambio, volver a medir. Cambiar cinco cosas a la vez impide saber cuál funcionó, y suele dejar complejidad que no aportaba nada.\n\nLa pregunta que ordena todo el trabajo es **en qué hilo está el pico**. DevTools lo separa:\n\n**Si es el raster thread** (probable aquí, por sombra + recorte):\n- `ClipRRect` con antialiasing y `BoxShadow` pueden provocar `saveLayer`, que obliga a la GPU a renderizar a una textura intermedia. Es de lo más caro del pipeline.\n- Alternativa: un `BoxDecoration` con `borderRadius` y `boxShadow` sobre el propio contenedor evita el clip explícito. Para imágenes, `ClipRRect` con `Clip.hardEdge` en vez de `antiAlias` si la calidad lo permite.\n\n**Si es el UI thread**:\n- Filas no `const`, widgets reconstruyéndose de más, `Theme.of` en un punto alto.\n- `itemExtent` o `prototypeItem` si todas las filas miden igual: ahorra al `Sliver` calcular posiciones acumuladas.\n\n**Las imágenes son un caso aparte** y suelen ser el culpable real: 5.000 avatares a resolución completa saturan el `ImageCache` y la decodificación bloquea. La corrección es `cacheWidth`/`cacheHeight` para decodificar al tamaño de presentación, no al original. Un avatar de 48 px no necesita decodificar 1024×1024: son 4 MB de mapa de bits por imagen.\n\nY una comprobación de fondo: ¿5.000 elementos planos es la UI correcta, o el usuario necesita búsqueda y filtros? A veces el mejor cambio de rendimiento es de producto.",
+      "solutionSketch": "```dart\n// 1. Medir en profile, no en debug.\n//    flutter run --profile  →  DevTools → Performance\n\n// 2. Si el pico está en raster: eliminar saveLayer.\n// Antes\nClipRRect(\n  borderRadius: BorderRadius.circular(8),\n  child: Container(\n    decoration: const BoxDecoration(boxShadow: [BoxShadow(blurRadius: 8)]),\n    child: content,\n  ),\n)\n\n// Después: una sola decoración, sin clip explícito\nContainer(\n  decoration: BoxDecoration(\n    borderRadius: BorderRadius.circular(8),\n    boxShadow: const [BoxShadow(blurRadius: 8)],\n  ),\n  clipBehavior: Clip.hardEdge,\n  child: content,\n)\n\n// 3. Imágenes: decodificar al tamaño real de presentación.\nImage.network(\n  url,\n  width: 48,\n  height: 48,\n  cacheWidth: 96,  // 48 lógicos x devicePixelRatio\n  cacheHeight: 96,\n)\n\n// 4. Filas de altura fija: evitar el cálculo acumulado de offsets.\nListView.builder(\n  itemExtent: 72,\n  itemCount: items.length,\n  itemBuilder: (context, index) => const _Row(...), // const donde se pueda\n)\n```",
+      "complexity": "El objetivo es un presupuesto de 16 ms por frame a 60 Hz (8 ms a 120 Hz), repartido entre UI y raster.",
+      "pitfalls": [
+        "Medir en debug: los números no significan nada y llevan a optimizar lo que no toca.",
+        "Aplicar todas las optimizaciones a la vez sin medir entre medias.",
+        "Meter RepaintBoundary en cada fila \"por si acaso\": ListView ya lo hace y añadir más consume memoria de textura.",
+        "Olvidar cacheWidth/cacheHeight, que suele ser el cambio de mayor impacto y el que menos se recuerda."
+      ]
+    },
+    {
+      "id": "flutter-e007",
+      "title": "Widget test de un flujo de login",
+      "difficulty": "medium",
+      "topic": "Testing",
+      "statement": "Escribe los widget tests de una pantalla de login con email y contraseña. Cubre: validación de campos vacíos, credenciales incorrectas (error del servidor), login correcto (navega), y que el botón se deshabilita mientras la petición está en vuelo.",
+      "hints": [
+        "El repositorio se inyecta; no hagas red de verdad en un widget test.",
+        "Para probar el estado intermedio de carga necesitas un Future que no se complete todavía.",
+        "pumpAndSettle con un spinner en pantalla puede colgarse."
+      ],
+      "approach": "La clave de este ejercicio es el **estado intermedio**. Los tres primeros casos son directos: rellenar, pulsar, verificar. El cuarto exige control sobre el tiempo.\n\nSi el fake devuelve un `Future` ya resuelto, la carga ocurre y termina entre dos frames y nunca puedes observarla. La técnica es devolver un `Completer` que **tú** completas cuando quieras: pulsas, haces `pump()` (un solo frame), verificas que el botón está deshabilitado y el spinner visible, y solo entonces completas el future y haces `pump()` otra vez.\n\nEs importante `pump()` y no `pumpAndSettle()` en ese punto: `pumpAndSettle` intentaría llegar al reposo y, con un spinner indeterminado en pantalla y un future pendiente, se colgaría hasta el timeout.\n\nSobre los fakes: para este caso un fake escrito a mano es más legible que un mock generado. Los mocks con verificación de llamadas acoplan el test a *cómo* está implementado; aquí lo que interesa es el comportamiento observable.\n\nY una decisión de diseño que el ejercicio revela: si la navegación se hace llamando a `Navigator.push` dentro del widget, probarla obliga a montar un `MaterialApp` con observador de rutas. Si se hace mediante un callback inyectado, el test verifica que el callback se llamó, que es más simple y más honesto respecto a lo que se está probando.",
+      "solutionSketch": "```dart\nclass FakeAuth implements AuthRepository {\n  Completer<User>? pending;\n  Object? error;\n\n  @override\n  Future<User> login(String email, String password) {\n    if (error != null) return Future.error(error!);\n    return (pending = Completer<User>()).future;\n  }\n}\n\ntestWidgets('deshabilita el botón mientras el login está en vuelo',\n    (tester) async {\n  final auth = FakeAuth();\n  await tester.pumpWidget(wrap(LoginScreen(auth: auth)));\n\n  await tester.enterText(find.byKey(const Key('email')), 'a@b.com');\n  await tester.enterText(find.byKey(const Key('password')), 'secreto');\n  await tester.tap(find.byKey(const Key('submit')));\n\n  // Un solo frame: estamos dentro del estado de carga.\n  await tester.pump();\n\n  final button = tester.widget<FilledButton>(find.byKey(const Key('submit')));\n  expect(button.onPressed, isNull);\n  expect(find.byType(CircularProgressIndicator), findsOneWidget);\n\n  // Ahora sí, resolvemos y dejamos que termine.\n  auth.pending!.complete(const User(id: '1'));\n  await tester.pumpAndSettle();\n\n  expect(find.byType(CircularProgressIndicator), findsNothing);\n});\n```",
+      "complexity": "Milisegundos por test: no hay dispositivo ni red. Es la razón por la que la mayor parte de la cobertura debería estar aquí y no en tests de integración.",
+      "pitfalls": [
+        "pumpAndSettle con un spinner indeterminado: el test se cuelga hasta el timeout.",
+        "Usar un Future ya resuelto y luego no poder observar el estado de carga.",
+        "Dejar timers o suscripciones vivos al acabar: el test falla con \"A Timer is still pending\".",
+        "Verificar llamadas al mock en vez de comportamiento visible: el test se rompe al refactorizar sin que nada se haya roto de verdad."
+      ]
+    },
+    {
+      "id": "flutter-e008",
+      "title": "Parsear un JSON grande sin bloquear la UI",
+      "difficulty": "hard",
+      "topic": "Asincronía y rendimiento",
+      "statement": "La app recibe un JSON de 20 MB y la UI se congela dos segundos al procesarlo. Resuélvelo, y explica por qué envolverlo en `async`/`await` no arregla nada.",
+      "hints": [
+        "¿Cuántos hilos tiene un isolate de Dart?",
+        "El coste de un isolate no es solo arrancarlo: también pasar los datos.",
+        "¿Se puede evitar materializar los 20 MB en memoria de golpe?"
+      ],
+      "approach": "Primero, el malentendido de fondo: **`async`/`await` no crea concurrencia**. Solo permite suspender y reanudar en el mismo hilo. Un `jsonDecode` de 20 MB es trabajo de CPU continuo: una vez empieza, no cede el control hasta terminar. Envolverlo en `async` cambia *cuándo* empieza a bloquear, no *si* bloquea.\n\nLa herramienta correcta es un **isolate**, que sí es paralelismo real. `Isolate.run()` es la forma moderna y ergonómica: ejecuta una función en un isolate nuevo, devuelve el resultado y lo destruye.\n\nPero hay una trampa importante: los isolates **no comparten memoria**, los mensajes se **copian**. Si le pasas el string de 20 MB y te devuelve una lista de objetos igual de grande, pagas dos copias y puedes acabar más lento que antes. Estrategias:\n\n- **Pasar lo mínimo**: mandar al isolate la petición completa (que descargue *y* parsee allí) en vez de descargar en el hilo principal y mandar el string.\n- **Devolver lo mínimo**: si la UI solo pinta 50 filas, que el isolate devuelva esas 50, no las 100.000.\n- **`TransferableTypedData`** para bytes: se transfiere sin copia.\n\nY una pregunta previa que suele dar el mejor resultado: **¿hace falta el JSON entero?** 20 MB en el cliente casi siempre indica una API mal dimensionada. Paginar o dejar que el servidor filtre elimina el problema de raíz en vez de gestionarlo mejor.",
+      "solutionSketch": "```dart\n// Mal: async no evita el bloqueo. El hilo de UI sigue parado 2 s.\nFuture<List<Item>> parseBad(String json) async {\n  final raw = jsonDecode(json) as List;      // bloquea aquí\n  return raw.map(Item.fromJson).toList();\n}\n\n// Bien: el trabajo pesado va a otro isolate.\nFuture<List<Item>> parseGood(String json) {\n  return Isolate.run(() {\n    final raw = jsonDecode(json) as List;\n    return raw.map((e) => Item.fromJson(e as Map<String, dynamic>)).toList();\n  });\n}\n\n// Mejor: descargar Y parsear dentro del isolate, para no copiar\n// los 20 MB del string a través de la frontera.\nFuture<List<Item>> fetchAndParse(Uri url) {\n  return Isolate.run(() async {\n    final response = await http.get(url);\n    final raw = jsonDecode(response.body) as List;\n    return raw.map((e) => Item.fromJson(e as Map<String, dynamic>)).toList();\n  });\n}\n```",
+      "complexity": "El parseo sigue siendo O(n); lo que cambia es que deja de ocurrir en el hilo de UI. Coste añadido: arranque del isolate (unos ms) y copia de los mensajes, O(tamaño).",
+      "pitfalls": [
+        "Creer que async/await resuelve el bloqueo de CPU.",
+        "Usar un isolate para trabajo pequeño: el arranque y la copia cuestan más que el propio cálculo.",
+        "Devolver una estructura enorme desde el isolate y pagar la copia completa.",
+        "Pasar al isolate una closure que captura objetos no enviables: falla en runtime, no en compilación."
+      ]
+    },
+    {
+      "id": "flutter-e009",
+      "title": "Cola de sincronización offline",
+      "difficulty": "hard",
+      "topic": "Arquitectura",
+      "statement": "Los usuarios crean notas sin conexión. Diseña la cola de sincronización: persistencia de las operaciones pendientes, reintentos, idempotencia, orden, y qué ocurre si el servidor rechaza una operación de forma permanente.",
+      "hints": [
+        "Si la cola vive en memoria, se pierde al cerrar la app.",
+        "¿Qué pasa si la petición llega al servidor pero la respuesta se pierde?",
+        "Un error 500 y un error 422 no se tratan igual."
+      ],
+      "approach": "El patrón es un **outbox**: una tabla persistida de operaciones pendientes, no una lista en memoria. Si la cola no sobrevive al cierre de la app, no es offline-first.\n\nCada entrada necesita: un id de cliente (UUID generado localmente), el tipo de operación, su payload, el número de intentos, la marca de tiempo y el estado.\n\nLos puntos que determinan si el diseño es correcto:\n\n**Idempotencia.** El caso que rompe las implementaciones ingenuas: la petición llega al servidor, este la procesa, y la respuesta se pierde por un corte de red. El cliente no sabe si se aplicó y reintenta. Sin protección, se crean dos notas. La solución es que el **cliente genere el id** y el servidor trate un id repetido como la misma operación. Esto obliga a un acuerdo con el backend: no es una decisión que se pueda tomar solo en el cliente.\n\n**Clasificación de errores.** Reintentar a ciegas es un error de diseño:\n- Red o 5xx → **transitorio**: reintentar con backoff exponencial y jitter (sin jitter, todos los clientes reintentan a la vez tras una caída y tiras el servidor al recuperarse).\n- 4xx de validación → **permanente**: reintentar no va a cambiar nada. Marcar como fallida y avisar al usuario.\n- 401 → **caso aparte**: refrescar el token y reintentar una vez.\n\n**Orden.** Si las operaciones dependen entre sí (crear nota, luego editarla), hay que procesar en serie por entidad. En paralelo y sin orden, la edición puede llegar antes que la creación.\n\n**Visibilidad.** El usuario tiene que ver el estado: pendiente, sincronizado, fallido. Una nota que desaparece en silencio porque el servidor la rechazó destruye la confianza en la app más que un error visible.",
+      "solutionSketch": "```dart\nenum OpStatus { pending, inFlight, failed }\n\nclass PendingOp {\n  const PendingOp({\n    required this.id,        // UUID del cliente = clave de idempotencia\n    required this.entityId,  // para ordenar por entidad\n    required this.type,\n    required this.payload,\n    this.attempts = 0,\n    this.status = OpStatus.pending,\n  });\n  // ... campos\n}\n\nFuture<void> processQueue() async {\n  final pending = await db.pendingOps(); // ordenadas por createdAt\n  for (final op in pending) {\n    try {\n      // El servidor usa op.id para descartar duplicados.\n      await api.apply(op, idempotencyKey: op.id);\n      await db.remove(op.id);\n    } on PermanentFailure catch (error) {\n      // 4xx de validación: reintentar no cambia nada.\n      await db.markFailed(op.id, '$error');\n      notifyUser(op, error);\n    } on TransientFailure {\n      // Red o 5xx: backoff exponencial con jitter.\n      final delay = Duration(\n        milliseconds: (1000 * pow(2, op.attempts)).toInt() +\n            Random().nextInt(1000),\n      );\n      await db.scheduleRetry(op.id, after: delay);\n      break; // preservar el orden: no saltar a la siguiente\n    }\n  }\n}\n```",
+      "complexity": "O(n) por pasada sobre las operaciones pendientes. El backoff exponencial acota el número de reintentos en el tiempo y protege al servidor.",
+      "pitfalls": [
+        "Cola en memoria: se pierde al cerrar la app y con ella el trabajo del usuario.",
+        "Sin clave de idempotencia: duplicados cada vez que se pierde una respuesta.",
+        "Reintentar indefinidamente errores permanentes: la cola se atasca y nunca progresa.",
+        "Backoff sin jitter: tormenta de reintentos sincronizados cuando el servidor vuelve.",
+        "Procesar en paralelo operaciones dependientes y aplicarlas en desorden."
+      ]
+    },
+    {
+      "id": "flutter-e010",
+      "title": "Widget de layout personalizado",
+      "difficulty": "hard",
+      "topic": "Internals",
+      "statement": "Implementa un `ChipWrap`: coloca hijos de ancho variable en filas, saltando de línea al agotar el ancho, con separaciones configurables y todas las filas alineadas por su línea base. Hazlo con un `RenderBox` propio y explica por qué `Wrap` no basta para el requisito de la línea base.",
+      "hints": [
+        "Extiende RenderBox con ContainerRenderObjectMixin y RenderBoxContainerDefaultsMixin.",
+        "performLayout tiene dos partes: medir cada hijo y después colocarlos.",
+        "La línea base de un hijo se consulta con getDistanceToBaseline."
+      ],
+      "approach": "Primero lo honesto: **`Wrap` cubre el 95% de este caso**. Un RenderBox propio solo se justifica aquí por el requisito de la línea base, que `Wrap` no ofrece: alinea por el borde del hijo (`WrapCrossAlignment`), no por la línea base del texto que contiene. Con chips de distinto tamaño de fuente, el resultado visual baila.\n\nLa estructura de un `RenderBox` con varios hijos:\n\n- **`ContainerRenderObjectMixin`** aporta la lista enlazada de hijos; **`RenderBoxContainerDefaultsMixin`** aporta implementaciones por defecto de hit testing y pintado.\n- **`setupParentData`** asigna a cada hijo los datos de posición. Se usa `BoxParentData`, que tiene el `offset` donde el padre coloca al hijo.\n- **`performLayout`** es el núcleo, en dos fases: medir cada hijo con restricciones **loose** (que elija su tamaño natural) y, mientras tanto, acumular anchos para decidir dónde cortar la línea; después, colocar cada uno escribiendo su `offset`.\n\nPara la línea base: durante la primera fase se guarda, por cada fila, la línea base máxima (`child.getDistanceToBaseline(TextBaseline.alphabetic)`). Al colocar, el desplazamiento vertical de cada hijo es `baselineDeLaFila − baselineDelHijo`, lo que alinea el texto aunque las cajas tengan alturas distintas.\n\n- **`computeDryLayout`** debe calcular el tamaño **sin** colocar hijos. Existe porque widgets como `IntrinsicHeight` necesitan preguntar \"¿cuánto medirías?\" sin provocar un layout real. Si se implementa mal o se omite, aparecen errores confusos cuando alguien envuelve tu widget.\n- **`paint`** puede delegar en `defaultPaint`, que pinta los hijos en sus offsets.\n\nY un aviso de mantenimiento: este código no lo va a tocar nadie más del equipo. Merece tests de layout (verificar offsets concretos) y golden tests, o se degradará en la primera refactorización.",
+      "solutionSketch": "```dart\nclass RenderChipWrap extends RenderBox\n    with\n        ContainerRenderObjectMixin<RenderBox, BoxParentData>,\n        RenderBoxContainerDefaultsMixin<RenderBox, BoxParentData> {\n  RenderChipWrap({required double spacing, required double runSpacing})\n      : _spacing = spacing,\n        _runSpacing = runSpacing;\n\n  double _spacing;\n  double _runSpacing;\n\n  @override\n  void setupParentData(RenderBox child) {\n    if (child.parentData is! BoxParentData) child.parentData = BoxParentData();\n  }\n\n  @override\n  void performLayout() {\n    final maxWidth = constraints.maxWidth;\n    // Restricciones loose: cada hijo elige su tamaño natural.\n    final childConstraints = BoxConstraints(maxWidth: maxWidth);\n\n    var child = firstChild;\n    final rows = <List<RenderBox>>[[]];\n    var rowWidth = 0.0;\n\n    // Fase 1: medir y repartir en filas.\n    while (child != null) {\n      child.layout(childConstraints, parentUsesSize: true);\n      final needed = rows.last.isEmpty ? child.size.width\n                                       : _spacing + child.size.width;\n      if (rowWidth + needed > maxWidth && rows.last.isNotEmpty) {\n        rows.add([]);\n        rowWidth = child.size.width;\n      } else {\n        rowWidth += needed;\n      }\n      rows.last.add(child);\n      child = (child.parentData! as BoxParentData).nextSibling;\n    }\n\n    // Fase 2: colocar, alineando cada fila por su línea base.\n    var y = 0.0;\n    for (final row in rows) {\n      final baseline = row\n          .map((c) => c.getDistanceToBaseline(TextBaseline.alphabetic) ??\n              c.size.height)\n          .reduce(max);\n      final rowHeight = row\n          .map((c) => baseline -\n              (c.getDistanceToBaseline(TextBaseline.alphabetic) ??\n                  c.size.height) +\n              c.size.height)\n          .reduce(max);\n\n      var x = 0.0;\n      for (final c in row) {\n        final childBaseline =\n            c.getDistanceToBaseline(TextBaseline.alphabetic) ?? c.size.height;\n        (c.parentData! as BoxParentData).offset =\n            Offset(x, y + baseline - childBaseline);\n        x += c.size.width + _spacing;\n      }\n      y += rowHeight + _runSpacing;\n    }\n\n    size = constraints.constrain(\n      Size(maxWidth, (y - _runSpacing).clamp(0.0, double.infinity)),\n    );\n  }\n\n  @override\n  void paint(PaintingContext context, Offset offset) =>\n      defaultPaint(context, offset);\n\n  @override\n  bool hitTestChildren(BoxHitTestResult result, {required Offset position}) =>\n      defaultHitTestChildren(result, position: position);\n}\n```",
+      "complexity": "O(n) sobre los hijos, una sola pasada de medida y una de colocación. Consultar la línea base puede forzar layout del hijo, de ahí `parentUsesSize: true`.",
+      "pitfalls": [
+        "No implementar computeDryLayout: falla en cuanto alguien lo envuelve en IntrinsicHeight o en un Flex que necesita medidas secas.",
+        "Olvidar parentUsesSize: true al medir hijos cuyo tamaño usas: Flutter no invalida correctamente.",
+        "Escribir el offset en el propio hijo en vez de en su parentData.",
+        "No implementar hitTestChildren: el widget se ve pero no responde a los toques.",
+        "Escribirlo entero cuando un Wrap habría bastado."
+      ]
+    }
+  ],
+  "roadmap": {
+    "stages": [
+      {
+        "id": "flutter-s1",
+        "level": "junior",
+        "title": "Etapa 1 · Fundamentos: que funcione",
+        "estimatedWeeks": 10,
+        "goal": "Ser capaz de construir una app de varias pantallas con datos de una API, tú solo, sin copiar de un tutorial. En esta etapa el objetivo no es la elegancia: es la autonomía. Un junior que entrega algo que funciona ya aporta valor.",
+        "skills": [
+          "Dart básico",
+          "Widgets",
+          "Layout",
+          "setState",
+          "Navegación",
+          "HTTP",
+          "Git"
+        ],
+        "milestones": [
+          {
+            "id": "flutter-m101",
+            "title": "Dart antes que Flutter",
+            "detail": "Dos semanas solo de lenguaje: tipos, null safety, colecciones, clases, async/await. Saltarse esto es la causa número uno de atascarse después con errores que no son de Flutter."
+          },
+          {
+            "id": "flutter-m102",
+            "title": "Layout sin buscar en Google",
+            "detail": "Reproduce cinco pantallas de apps reales solo con Row, Column, Stack, Expanded y Padding. Hasta que no interiorices \"constraints bajan, tamaños suben\", pelearás con cada pantalla."
+          },
+          {
+            "id": "flutter-m103",
+            "title": "Una app CRUD completa",
+            "detail": "Lista, detalle, crear, editar, borrar, contra una API pública. Con sus estados de carga, error y vacío en las cuatro pantallas."
+          },
+          {
+            "id": "flutter-m104",
+            "title": "Persistencia local",
+            "detail": "Guarda algo que sobreviva al cierre: SharedPreferences para preferencias y una base local para datos."
+          },
+          {
+            "id": "flutter-m105",
+            "title": "Publicar algo",
+            "detail": "Compila en release y ponlo en manos de otra persona, aunque sea un APK por WhatsApp. Cerrar el ciclo completo enseña cosas que ningún tutorial cuenta."
+          }
+        ],
+        "resources": [
+          {
+            "title": "Dart language tour",
+            "url": "https://dart.dev/language",
+            "kind": "docs"
+          },
+          {
+            "title": "Flutter: Layout tutorial",
+            "url": "https://docs.flutter.dev/ui/layout/tutorial",
+            "kind": "docs"
+          },
+          {
+            "title": "Understanding constraints",
+            "url": "https://docs.flutter.dev/ui/layout/constraints",
+            "kind": "docs"
+          },
+          {
+            "title": "Flutter Widget of the Week",
+            "url": "https://www.youtube.com/playlist?list=PLjxrf2q8roU23XGwz3Km7sQZFTdB996iG",
+            "kind": "video"
+          }
+        ],
+        "readinessSignals": [
+          "Construyes una pantalla nueva sin buscar la estructura básica.",
+          "Lees un error de layout y sabes hacia dónde mirar sin pegarlo en un buscador.",
+          "Entiendes por qué tu código funciona, no solo que funciona."
+        ]
+      },
+      {
+        "id": "flutter-s2",
+        "level": "junior",
+        "title": "Etapa 2 · Oficio: que funcione bien",
+        "estimatedWeeks": 14,
+        "goal": "Pasar de \"funciona en mi móvil\" a \"funciona para usuarios reales\". Aquí se aprende que el camino feliz es la parte fácil: el trabajo está en los bordes.",
+        "skills": [
+          "Gestión de estado",
+          "Testing",
+          "Manejo de errores",
+          "Formularios",
+          "Arquitectura por capas",
+          "Accesibilidad"
+        ],
+        "milestones": [
+          {
+            "id": "flutter-m201",
+            "title": "Un gestor de estado de verdad",
+            "detail": "Elige uno (Riverpod, BLoC o Provider) y usa el mismo durante al menos tres proyectos. Saltar de uno a otro cada mes impide llegar a entender ninguno."
+          },
+          {
+            "id": "flutter-m202",
+            "title": "Tu primer test que atrapa un bug real",
+            "detail": "No cobertura por cobertura. Escribe un test, refactoriza, y deja que el test te avise. Esa sensación es lo que convierte los tests en un hábito."
+          },
+          {
+            "id": "flutter-m203",
+            "title": "Separar la lógica de la UI",
+            "detail": "Refactoriza un proyecto viejo para que la lógica de negocio se pueda probar sin montar un solo widget. Notarás cuánto había mezclado."
+          },
+          {
+            "id": "flutter-m204",
+            "title": "Los cuatro estados, siempre",
+            "detail": "Carga, error, vacío y contenido en cada pantalla que consuma datos. Y sin conexión: ¿qué ve el usuario?"
+          },
+          {
+            "id": "flutter-m205",
+            "title": "Leer código ajeno",
+            "detail": "Coge un paquete popular de pub.dev y lee su código fuente entero. Aprender a leer código es una habilidad distinta de escribirlo, y se entrena aparte."
+          },
+          {
+            "id": "flutter-m206",
+            "title": "Accesibilidad básica",
+            "detail": "Recorre una app tuya con el lector de pantalla activado y con el tamaño de fuente del sistema al máximo. Arregla lo que encuentres."
+          }
+        ],
+        "resources": [
+          {
+            "title": "Flutter: Testing",
+            "url": "https://docs.flutter.dev/testing/overview",
+            "kind": "docs"
+          },
+          {
+            "title": "Riverpod documentation",
+            "url": "https://riverpod.dev/",
+            "kind": "docs"
+          },
+          {
+            "title": "Flutter architecture guide",
+            "url": "https://docs.flutter.dev/app-architecture",
+            "kind": "docs"
+          },
+          {
+            "title": "Effective Dart",
+            "url": "https://dart.dev/effective-dart",
+            "kind": "docs"
+          }
+        ],
+        "readinessSignals": [
+          "Escribes tests sin que nadie te lo pida porque te ahorran tiempo.",
+          "Antes de programar una pantalla piensas en sus estados, no en su aspecto.",
+          "Sabes justificar por qué elegiste tu gestor de estado y qué te costaría cambiarlo."
+        ]
+      },
+      {
+        "id": "flutter-s3",
+        "level": "mid",
+        "title": "Etapa 3 · Profundidad: entender la máquina",
+        "estimatedWeeks": 22,
+        "goal": "Dejar de tratar Flutter como una caja negra. En esta etapa se empieza a resolver problemas que no tienen respuesta en Stack Overflow, porque dependen de tu contexto concreto.",
+        "skills": [
+          "Internals de Flutter",
+          "Rendimiento",
+          "Asincronía avanzada",
+          "Integración nativa",
+          "CI/CD",
+          "Diseño de APIs"
+        ],
+        "milestones": [
+          {
+            "id": "flutter-m301",
+            "title": "Los tres árboles",
+            "detail": "Entiende widget, element y render tree, y qué ocurre exactamente en cada fase de un frame. Es lo que convierte \"añade const\" en una decisión razonada."
+          },
+          {
+            "id": "flutter-m302",
+            "title": "Optimizar algo medido",
+            "detail": "Coge una pantalla lenta de verdad, perfílala en modo profile, y documenta el antes y el después con números. Sin medición no es optimizar, es adivinar."
+          },
+          {
+            "id": "flutter-m303",
+            "title": "Un plugin propio",
+            "detail": "Escribe un plugin con platform channels para Android y iOS, aunque sea trivial. Cruzar esa frontera una vez desmitifica todo el terreno nativo."
+          },
+          {
+            "id": "flutter-m304",
+            "title": "Un pipeline de CI completo",
+            "detail": "Análisis, formato, tests, build firmado y distribución a testers, automático desde un push."
+          },
+          {
+            "id": "flutter-m305",
+            "title": "Caza una fuga de memoria",
+            "detail": "Con DevTools, en una app real. Aprende a usar el path to root: es la diferencia entre encontrar la fuga y adivinarla."
+          },
+          {
+            "id": "flutter-m306",
+            "title": "Publica un paquete",
+            "detail": "Extrae algo reutilizable, documéntalo, súbelo a pub.dev y mantenlo. Diseñar una API pública que usen otros enseña más sobre diseño que diez proyectos internos."
+          },
+          {
+            "id": "flutter-m307",
+            "title": "Revisa código ajeno",
+            "detail": "Participa en revisiones con criterio. Explicar por qué algo debería ser distinto obliga a entender el porqué, no solo el qué."
+          }
+        ],
+        "resources": [
+          {
+            "title": "Flutter performance best practices",
+            "url": "https://docs.flutter.dev/perf/best-practices",
+            "kind": "docs"
+          },
+          {
+            "title": "Inside Flutter",
+            "url": "https://docs.flutter.dev/resources/inside-flutter",
+            "kind": "docs"
+          },
+          {
+            "title": "Flutter DevTools",
+            "url": "https://docs.flutter.dev/tools/devtools/overview",
+            "kind": "docs"
+          },
+          {
+            "title": "Writing platform-specific code",
+            "url": "https://docs.flutter.dev/platform-integration/platform-channels",
+            "kind": "docs"
+          },
+          {
+            "title": "Código fuente del framework Flutter",
+            "url": "https://github.com/flutter/flutter/tree/master/packages/flutter/lib/src",
+            "kind": "repo"
+          }
+        ],
+        "readinessSignals": [
+          "Diagnosticas un problema de rendimiento sin cambiar código al azar.",
+          "Lees el código fuente del framework cuando la documentación no basta.",
+          "Otras personas del equipo te preguntan antes de tomar decisiones técnicas."
+        ]
+      },
+      {
+        "id": "flutter-s4",
+        "level": "senior",
+        "title": "Etapa 4 · Criterio: decidir y multiplicar",
+        "estimatedWeeks": 40,
+        "goal": "El salto a senior no es saber más Flutter. Es tomar decisiones con información incompleta, asumir sus consecuencias, y hacer que el equipo entero rinda mejor. Un senior que solo programa muy bien es un mid muy rápido.",
+        "skills": [
+          "Arquitectura a escala",
+          "Decisiones técnicas",
+          "Mentoría",
+          "Comunicación con negocio",
+          "Gestión de deuda técnica",
+          "Seguridad"
+        ],
+        "milestones": [
+          {
+            "id": "flutter-m401",
+            "title": "Una decisión arquitectónica documentada",
+            "detail": "Escribe un ADR real: contexto, opciones consideradas, criterios, decisión y consecuencias asumidas. Incluida la opción que descartaste y por qué."
+          },
+          {
+            "id": "flutter-m402",
+            "title": "Modulariza un proyecto grande",
+            "detail": "Lleva una base de código monolítica a paquetes con límites verificables por el compilador. Mide el efecto en el tiempo de build y en los conflictos de merge."
+          },
+          {
+            "id": "flutter-m403",
+            "title": "Defiende una decisión ante negocio",
+            "detail": "Justifica una inversión técnica en términos de coste y riesgo, no de elegancia. \"Es más limpio\" no es un argumento; \"reduce el tiempo de incidencia en un 40%\" sí."
+          },
+          {
+            "id": "flutter-m404",
+            "title": "Haz crecer a alguien",
+            "detail": "Acompaña a un junior durante meses hasta que resuelva solo cosas que antes te traía. Esta es la habilidad que más distingue a un senior y la que menos se practica."
+          },
+          {
+            "id": "flutter-m405",
+            "title": "Gestiona un incidente en producción",
+            "detail": "Detección, mitigación, comunicación y post-mortem sin culpables. La parte difícil no es el arreglo: es decidir qué hacer con información parcial y con gente esperando."
+          },
+          {
+            "id": "flutter-m406",
+            "title": "Di que no con argumentos",
+            "detail": "Rechaza una funcionalidad, una dependencia o una migración, explicando el coste de oportunidad. Saber qué no construir es una habilidad senior."
+          },
+          {
+            "id": "flutter-m407",
+            "title": "Deja el sistema mejor que el código",
+            "detail": "Convierte conocimiento tácito en convenciones escritas, lints y plantillas. Si el equipo mejora solo cuando tú revisas, no has resuelto el problema."
+          }
+        ],
+        "resources": [
+          {
+            "title": "Architecture Decision Records",
+            "url": "https://adr.github.io/",
+            "kind": "article"
+          },
+          {
+            "title": "The Staff Engineer's Path — Tanya Reilly",
+            "url": "https://www.oreilly.com/library/view/the-staff-engineers/9781098118723/",
+            "kind": "book"
+          },
+          {
+            "title": "A Philosophy of Software Design — John Ousterhout",
+            "url": "https://web.stanford.edu/~ouster/cgi-bin/book.php",
+            "kind": "book"
+          },
+          {
+            "title": "Flutter security best practices",
+            "url": "https://docs.flutter.dev/security",
+            "kind": "docs"
+          }
+        ],
+        "readinessSignals": [
+          "Te consultan decisiones antes de tomarlas, no después de romperlas.",
+          "Tu impacto se nota en trabajo que no escribiste tú.",
+          "Sabes explicar un trade-off técnico a alguien que no programa.",
+          "Cambias de opinión cuando aparecen datos nuevos, sin que te cueste."
+        ]
+      }
+    ]
+  }
+}

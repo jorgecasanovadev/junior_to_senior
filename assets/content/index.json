@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "technologies": [
+    {
+      "id": "flutter",
+      "name": "Flutter",
+      "tagline": "UI declarativa multiplataforma sobre Dart: widgets, render pipeline, estado y rendimiento.",
+      "category": "Mobile",
+      "keywords": ["flutter", "dart ui", "widgets", "movil", "móvil"],
+      "seedColor": "0xFF0553B1",
+      "questionCount": 50,
+      "exerciseCount": 10,
+      "file": "flutter.json"
+    },
+    {
+      "id": "dart",
+      "name": "Dart",
+      "tagline": "El lenguaje detrás de Flutter: null safety, asincronía, isolates y sistema de tipos.",
+      "category": "Lenguaje",
+      "keywords": ["dart", "dartlang", "null safety", "isolates"],
+      "seedColor": "0xFF00B4AB",
+      "questionCount": 50,
+      "exerciseCount": 10,
+      "file": "dart.json"
+    }
+  ]
+}
