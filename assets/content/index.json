@@ -6,7 +6,13 @@
       "name": "Flutter",
       "tagline": "UI declarativa multiplataforma sobre Dart: widgets, render pipeline, estado y rendimiento.",
       "category": "Mobile",
-      "keywords": ["flutter", "dart ui", "widgets", "movil", "móvil"],
+      "keywords": [
+        "flutter",
+        "dart ui",
+        "widgets",
+        "movil",
+        "móvil"
+      ],
       "seedColor": "0xFF0553B1",
       "questionCount": 50,
       "exerciseCount": 10,
@@ -17,11 +23,33 @@
       "name": "Dart",
       "tagline": "El lenguaje detrás de Flutter: null safety, asincronía, isolates y sistema de tipos.",
       "category": "Lenguaje",
-      "keywords": ["dart", "dartlang", "null safety", "isolates"],
+      "keywords": [
+        "dart",
+        "dartlang",
+        "null safety",
+        "isolates"
+      ],
       "seedColor": "0xFF00B4AB",
       "questionCount": 50,
       "exerciseCount": 10,
       "file": "dart.json"
+    },
+    {
+      "id": "javascript",
+      "name": "JavaScript",
+      "tagline": "El lenguaje de la web: tipos, closures, event loop, asincronía y el navegador.",
+      "category": "Lenguaje",
+      "keywords": [
+        "javascript",
+        "js",
+        "ecmascript",
+        "es6",
+        "vanilla"
+      ],
+      "seedColor": "0xFFF7DF1E",
+      "questionCount": 50,
+      "exerciseCount": 10,
+      "file": "javascript.json"
     }
   ]
 }

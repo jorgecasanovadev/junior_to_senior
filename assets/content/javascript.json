@@ -1,0 +1,1525 @@
+{
+  "schemaVersion": 1,
+  "technologyId": "javascript",
+  "name": "JavaScript",
+  "questions": [
+    {
+      "id": "js-q001",
+      "level": "junior",
+      "topic": "Tipos",
+      "tags": [
+        "tipos",
+        "fundamentos"
+      ],
+      "prompt": "¿Cuál es la diferencia entre var, let y const?",
+      "answer": "Tres diferencias, y la del ámbito es la importante:\n\n- **Ámbito**: `var` tiene ámbito de **función**; `let` y `const` de **bloque** (`{}`). Por eso `var` declarado dentro de un `if` sigue existiendo fuera.\n- **Hoisting**: las tres se elevan, pero `var` se inicializa a `undefined` y `let`/`const` quedan en la **temporal dead zone**: acceder antes de la declaración lanza `ReferenceError` en vez de darte `undefined` silenciosamente.\n- **Reasignación**: `const` no se puede reasignar. Pero **no congela el objeto**: `const arr = []; arr.push(1)` es perfectamente válido.\n\nEn código nuevo: `const` por defecto, `let` cuando necesites reasignar, `var` nunca. Que `let` falle ruidosamente en vez de darte `undefined` es una ventaja, no una molestia.",
+      "rubric": {
+        "junior": "Dice que var es de función y let/const de bloque, y que const no se reasigna.",
+        "mid": "Explica la temporal dead zone y aclara que const no hace inmutable el objeto.",
+        "senior": "Conecta el ámbito de var con el bug clásico del bucle con setTimeout y por qué let lo arregla creando un binding por iteración. Señala que usar const por defecto comunica intención al lector, no solo al motor."
+      },
+      "followUps": [
+        "¿Por qué un for con var y setTimeout imprime el mismo número?",
+        "¿Cómo haces un objeto realmente inmutable?"
+      ]
+    },
+    {
+      "id": "js-q002",
+      "level": "junior",
+      "topic": "Tipos",
+      "tags": [
+        "igualdad",
+        "coercion"
+      ],
+      "prompt": "¿Qué diferencia hay entre == y ===?",
+      "answer": "`===` compara **valor y tipo** sin convertir nada. `==` aplica **coerción**: intenta convertir los operandos a un tipo común antes de comparar.\n\nLas reglas de coerción producen resultados que nadie recuerda de memoria:\n\n```js\n0 == '';        // true\n0 == '0';       // true\n'' == '0';      // false  ← no es transitivo\nnull == undefined;  // true\nnull == 0;      // false\nNaN == NaN;     // false\n[] == false;    // true\n```\n\nQue `0 == ''` y `0 == '0'` sean true pero `'' == '0'` sea false demuestra que `==` **no es transitivo**, lo que rompe la intuición de cualquiera.\n\nRegla: usa siempre `===`. La única excepción defendible es `x == null`, que comprueba `null` **o** `undefined` a la vez y es un idioma reconocido.",
+      "rubric": {
+        "junior": "Sabe que == convierte tipos y === no, y que hay que usar ===.",
+        "mid": "Da ejemplos concretos de coerción sorprendente y conoce el idioma `x == null`.",
+        "senior": "Señala que == no es transitivo y por qué eso lo hace indefendible como regla general. Menciona Object.is para los casos de NaN y -0, donde === tampoco se comporta como esperarías."
+      },
+      "followUps": [
+        "¿Qué hace Object.is que no haga ===?",
+        "¿Por qué NaN !== NaN?"
+      ]
+    },
+    {
+      "id": "js-q003",
+      "level": "junior",
+      "topic": "Tipos",
+      "tags": [
+        "tipos",
+        "typeof"
+      ],
+      "prompt": "¿Cuáles son los tipos primitivos de JavaScript y qué devuelve typeof para cada uno?",
+      "answer": "Siete primitivos: `string`, `number`, `boolean`, `undefined`, `null`, `symbol`, `bigint`. Todo lo demás es objeto (incluidos arrays y funciones).\n\n```js\ntypeof 'a'        // 'string'\ntypeof 1          // 'number'\ntypeof true       // 'boolean'\ntypeof undefined  // 'undefined'\ntypeof Symbol()   // 'symbol'\ntypeof 1n         // 'bigint'\ntypeof {}         // 'object'\ntypeof []         // 'object'   ← no distingue arrays\ntypeof function(){} // 'function'\ntypeof null       // 'object'   ← el bug histórico\n```\n\n`typeof null === 'object'` es un error de la primera implementación de 1995 que nunca se corrigió porque habría roto la web. Es el ejemplo canónico de compatibilidad hacia atrás ganándole a la corrección.\n\nPara distinguir arrays: `Array.isArray()`. Para el resto, `Object.prototype.toString.call(x)` da el tipo interno real.",
+      "rubric": {
+        "junior": "Enumera los primitivos y sabe que typeof null da 'object'.",
+        "mid": "Usa Array.isArray y sabe que typeof no sirve para distinguir objetos entre sí.",
+        "senior": "Explica el origen del bug de typeof null y por qué no se corrige. Menciona Object.prototype.toString.call y Symbol.toStringTag para tipos personalizados."
+      },
+      "followUps": [
+        "¿Cómo distingues un array de un objeto?",
+        "¿Por qué no se arregla typeof null?"
+      ]
+    },
+    {
+      "id": "js-q004",
+      "level": "junior",
+      "topic": "Funciones",
+      "tags": [
+        "scope",
+        "closures"
+      ],
+      "prompt": "¿Qué es un closure y para qué sirve?",
+      "answer": "Un closure es una función que **recuerda el ámbito léxico donde fue creada**, aunque se ejecute fuera de él. En la práctica: la función mantiene vivas las variables de su entorno de creación.\n\n```js\nfunction contador() {\n  let n = 0;                 // no accesible desde fuera\n  return () => ++n;          // pero el closure la conserva\n}\n\nconst siguiente = contador();\nsiguiente(); // 1\nsiguiente(); // 2\n```\n\nPara qué sirve de verdad:\n- **Estado privado** sin clases.\n- **Factories** de funciones configuradas (`multiplicarPor(3)`).\n- Es la base de los **hooks de React**: `useState` funciona porque el closure captura el valor del render actual.\n\nY el coste: lo capturado no se libera mientras exista la función. Un closure que captura un objeto grande y se guarda en un listener es una fuga de memoria.",
+      "rubric": {
+        "junior": "Explica que la función recuerda las variables de fuera y da el ejemplo del contador.",
+        "mid": "Da casos de uso reales: estado privado, factories, y lo relaciona con patrones que usa a diario.",
+        "senior": "Habla del coste en memoria y de las fugas por closures retenidos en listeners, y conecta closures con el modelo mental de los hooks de React (stale closures)."
+      },
+      "followUps": [
+        "¿Cómo puede un closure causar una fuga de memoria?",
+        "¿Qué es un stale closure en React?"
+      ]
+    },
+    {
+      "id": "js-q005",
+      "level": "junior",
+      "topic": "Funciones",
+      "tags": [
+        "this",
+        "arrow"
+      ],
+      "prompt": "¿Qué diferencia hay entre una función normal y una arrow function?",
+      "answer": "La diferencia decisiva es **`this`**. Una función normal recibe su `this` según **cómo se la llama**; una arrow function **no tiene `this` propio**: lo hereda léxicamente del ámbito donde se definió.\n\n```js\nconst obj = {\n  nombre: 'Ana',\n  saludarMal: function () {\n    setTimeout(function () {\n      console.log(this.nombre); // undefined: this es otro\n    }, 0);\n  },\n  saludarBien: function () {\n    setTimeout(() => {\n      console.log(this.nombre); // 'Ana': hereda el this de saludarBien\n    }, 0);\n  },\n};\n```\n\nOtras diferencias:\n- Las arrow **no tienen `arguments`** (usa rest: `(...args)`).\n- **No se pueden usar con `new`**: no son constructoras.\n- No tienen `prototype`.\n- No pueden ser generadoras.\n\nPor eso un método de objeto que necesite `this` del propio objeto **no** debe ser arrow, y un callback dentro de un método **sí** debería serlo.",
+      "rubric": {
+        "junior": "Dice que la arrow es más corta y que this funciona distinto.",
+        "mid": "Explica el this léxico con un ejemplo de callback y conoce las limitaciones (new, arguments).",
+        "senior": "Articula la regla de diseño: arrow para callbacks que deben conservar el contexto, función normal para métodos y constructores. Menciona que esto elimina el antiguo `const self = this` y los bind manuales."
+      },
+      "followUps": [
+        "¿Por qué un método de clase como arrow no necesita bind?",
+        "¿Qué hacía `const self = this`?"
+      ]
+    },
+    {
+      "id": "js-q006",
+      "level": "junior",
+      "topic": "Funciones",
+      "tags": [
+        "this"
+      ],
+      "prompt": "¿Cómo se determina el valor de this en una función normal?",
+      "answer": "Por **cómo se invoca**, no por dónde se declara. Cuatro reglas, en orden de precedencia:\n\n1. **`new`**: `this` es el objeto recién creado.\n2. **`call` / `apply` / `bind`**: `this` es el que le pases explícitamente.\n3. **Como método**: `obj.metodo()` → `this` es `obj`. Lo que importa es lo que hay **antes del punto** en el momento de la llamada.\n4. **Llamada suelta**: `this` es `undefined` en modo estricto (y en módulos ES, que siempre lo son), o el objeto global fuera de él.\n\nDe la regla 3 sale el bug más frecuente: **extraer un método pierde el `this`**.\n\n```js\nconst f = obj.metodo;\nf(); // this ya no es obj\n\nbtn.addEventListener('click', obj.metodo);      // roto\nbtn.addEventListener('click', () => obj.metodo()); // bien\n```\n\nLas arrow functions se saltan estas cuatro reglas: heredan el `this` léxico.",
+      "rubric": {
+        "junior": "Sabe que this depende de cómo se llama y reconoce el caso del método.",
+        "mid": "Enumera las cuatro reglas y explica la pérdida de this al extraer un método.",
+        "senior": "Ordena las reglas por precedencia, menciona que los módulos ES son siempre estrictos (this undefined, no global), y explica por qué los campos de clase como arrow resuelven el problema de una vez."
+      },
+      "followUps": [
+        "¿Qué diferencia hay entre call, apply y bind?",
+        "¿Por qué se pierde this al pasar un método como callback?"
+      ]
+    },
+    {
+      "id": "js-q007",
+      "level": "junior",
+      "topic": "Objetos",
+      "tags": [
+        "copias",
+        "referencias"
+      ],
+      "prompt": "¿Qué diferencia hay entre copia superficial y copia profunda, y cómo se hace cada una?",
+      "answer": "Los objetos se asignan **por referencia**: `const b = a` no copia nada, hace que ambos apunten a lo mismo.\n\n**Copia superficial** (un nivel): copia las propiedades de primer nivel, pero los objetos anidados siguen compartidos.\n\n```js\nconst copia = { ...original };\nconst copia2 = Object.assign({}, original);\nconst arr2 = [...arr];\n\ncopia.anidado.x = 1;   // ¡también cambia en original!\n```\n\n**Copia profunda** (recursiva):\n- `structuredClone(obj)` — nativo, moderno, y la respuesta correcta hoy. Maneja Date, Map, Set, RegExp y referencias circulares.\n- `JSON.parse(JSON.stringify(obj))` — el truco clásico, pero **pierde** `undefined`, funciones, `Symbol`, convierte `Date` en string y **revienta con referencias circulares**.\n- `_.cloneDeep` de lodash, si ya lo tienes.\n\nY el aviso de rendimiento: clonar en profundidad es O(tamaño). En un render de React, clonar un objeto grande en cada cambio es un problema real; suele ser mejor actualizar por niveles con spread.",
+      "rubric": {
+        "junior": "Distingue las dos y sabe usar spread para la superficial.",
+        "mid": "Conoce las limitaciones del truco con JSON y usa structuredClone.",
+        "senior": "Sitúa el coste O(n) de la copia profunda y cuándo evitarla, y conoce qué preserva structuredClone (referencias circulares, tipos nativos) frente a las alternativas."
+      },
+      "followUps": [
+        "¿Qué pierde JSON.parse(JSON.stringify(x))?",
+        "¿Cómo actualizas un objeto anidado sin clonar todo?"
+      ]
+    },
+    {
+      "id": "js-q008",
+      "level": "junior",
+      "topic": "Arrays",
+      "tags": [
+        "arrays",
+        "metodos"
+      ],
+      "prompt": "¿Cuáles son los métodos de array que más usas y cuáles mutan el original?",
+      "answer": "**No mutan** (devuelven uno nuevo): `map`, `filter`, `slice`, `concat`, `reduce`, `find`, `some`, `every`, `flat`, `flatMap`, y los modernos `toSorted`, `toReversed`, `toSpliced`, `with`.\n\n**Sí mutan**: `push`, `pop`, `shift`, `unshift`, `splice`, `sort`, `reverse`, `fill`.\n\nLos dos que más sorprenden son `sort` y `reverse`, porque **mutan y además devuelven el array**, así que parecen puros:\n\n```js\nconst ordenado = datos.sort();  // ¡datos también quedó ordenado!\nconst ordenado = [...datos].sort();   // o datos.toSorted()\n```\n\nEn React esto es un bug directo: mutar el array del estado no dispara un re-render, porque la referencia no cambia.\n\nY otra trampa de `sort`: **sin comparador ordena como strings**. `[10, 9, 1].sort()` da `[1, 10, 9]`.",
+      "rubric": {
+        "junior": "Usa map, filter y reduce con soltura y sabe que push muta.",
+        "mid": "Tiene clara la lista de mutadores, especialmente sort y reverse, y el problema del comparador por defecto.",
+        "senior": "Conecta la mutación con los bugs de re-render en React y con la igualdad por referencia, y conoce los métodos inmutables modernos (toSorted, with) que evitan el spread defensivo."
+      },
+      "followUps": [
+        "¿Por qué [10,9,1].sort() da [1,10,9]?",
+        "¿Por qué mutar el estado no re-renderiza en React?"
+      ]
+    },
+    {
+      "id": "js-q009",
+      "level": "junior",
+      "topic": "Asincronía",
+      "tags": [
+        "promesas"
+      ],
+      "prompt": "¿Qué es una Promise y cuáles son sus estados?",
+      "answer": "Un objeto que representa el resultado futuro de una operación asíncrona. Tres estados, y **la transición es irreversible**:\n\n- `pending` → estado inicial.\n- `fulfilled` → se resolvió con un valor.\n- `rejected` → falló con una razón.\n\nUna vez resuelta o rechazada, queda fijada para siempre: llamar dos veces a `resolve` no hace nada.\n\n```js\nfetch(url)\n  .then(r => r.json())\n  .then(datos => usar(datos))\n  .catch(error => manejar(error))    // captura cualquier fallo de la cadena\n  .finally(() => ocultarSpinner());  // pase lo que pase\n```\n\nLo que soluciona frente a callbacks: el **callback hell** (anidamiento), y sobre todo la **propagación de errores**. Con callbacks tenías que comprobar el error en cada nivel; en una cadena de promesas, un `.catch()` al final recoge el fallo de cualquier eslabón.\n\nY un detalle que se olvida: **una promesa rechazada sin `catch` es un `unhandledrejection`**. En Node moderno eso termina el proceso.",
+      "rubric": {
+        "junior": "Nombra los tres estados y encadena then/catch.",
+        "mid": "Explica que el estado es irreversible, usa finally, y sabe que un rechazo sin catch es un error no manejado.",
+        "senior": "Compara con callbacks en términos de composición y propagación de errores, y menciona que `then` siempre devuelve una promesa nueva, lo que es la base de la composición."
+      },
+      "followUps": [
+        "¿Qué pasa si una promesa se rechaza y nadie la captura?",
+        "¿Qué devuelve .then()?"
+      ]
+    },
+    {
+      "id": "js-q010",
+      "level": "junior",
+      "topic": "Asincronía",
+      "tags": [
+        "async await"
+      ],
+      "prompt": "¿Qué hacen async y await, y cómo se manejan los errores?",
+      "answer": "`async` marca una función que **siempre devuelve una promesa**. `await` pausa su ejecución hasta que la promesa se resuelve, y devuelve el valor (o lanza si se rechaza).\n\nEs azúcar sintáctico sobre promesas: el código asíncrono se lee como síncrono, incluidos los bucles y los `try/catch`.\n\n```js\nasync function cargar() {\n  try {\n    const r = await fetch(url);\n    if (!r.ok) throw new Error(`HTTP ${r.status}`);  // fetch NO lanza en 404\n    return await r.json();\n  } catch (error) {\n    // Cae aquí tanto un fallo de red como el throw de arriba.\n    registrar(error);\n    throw error;   // si no relanzas, el llamador cree que fue bien\n  } finally {\n    ocultarSpinner();\n  }\n}\n```\n\nDos detalles que se escapan constantemente:\n\n1. **`fetch` no rechaza con un 404 ni un 500.** Solo falla si hay error de red. Hay que comprobar `response.ok` a mano.\n2. **Awaits en serie cuando podrían ir en paralelo.** `await a(); await b();` tarda la suma; `await Promise.all([a(), b()])` tarda el máximo. Es el error de rendimiento más común en código asíncrono.",
+      "rubric": {
+        "junior": "Usa async/await con try/catch correctamente.",
+        "mid": "Sabe que fetch no lanza con códigos de error HTTP y usa Promise.all para paralelizar.",
+        "senior": "Señala que tragarse el error sin relanzar engaña al llamador, distingue cuándo la serialización es necesaria (hay dependencia) de cuándo es un descuido, y conoce Promise.allSettled para tolerar fallos parciales."
+      },
+      "followUps": [
+        "¿Por qué fetch no lanza con un 500?",
+        "¿Cuándo usarías allSettled en vez de all?"
+      ]
+    },
+    {
+      "id": "js-q011",
+      "level": "junior",
+      "topic": "Asincronía",
+      "tags": [
+        "promesas",
+        "combinadores"
+      ],
+      "prompt": "¿Qué diferencia hay entre Promise.all, allSettled, race y any?",
+      "answer": "- **`all`**: espera a todas. Si **una** falla, rechaza inmediatamente con ese error y descarta el resto (aunque sigan ejecutándose). Todo o nada.\n- **`allSettled`**: espera a todas y **nunca rechaza**. Devuelve un array de `{status, value}` o `{status, reason}`. Es lo que quieres cuando un fallo parcial es aceptable.\n- **`race`**: se resuelve o rechaza con **la primera que termine**, sea éxito o fallo. El uso típico es el timeout.\n- **`any`**: se resuelve con la primera que **tenga éxito**; solo rechaza si fallan todas (con un `AggregateError`).\n\n```js\n// Cargar un dashboard: si falla un widget, los demás deben pintarse.\nconst partes = await Promise.allSettled([ventas(), usuarios(), alertas()]);\n\n// Timeout sobre una petición.\nawait Promise.race([\n  fetch(url),\n  new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 5000)),\n]);\n```\n\nElegir mal tiene consecuencias visibles: usar `all` en el dashboard hace que un widget caído deje la pantalla entera en blanco.",
+      "rubric": {
+        "junior": "Conoce all y sabe que espera a todas.",
+        "mid": "Distingue los cuatro y da un caso de uso de allSettled y de race.",
+        "senior": "Razona la elección desde el producto (¿qué debe ver el usuario si falla una parte?), y sabe que `all` no cancela las promesas restantes: siguen corriendo y pueden dar rechazos no manejados."
+      },
+      "followUps": [
+        "¿all cancela las promesas que quedan si una falla?",
+        "¿Cómo implementas un timeout con AbortController?"
+      ]
+    },
+    {
+      "id": "js-q012",
+      "level": "junior",
+      "topic": "Objetos",
+      "tags": [
+        "destructuring",
+        "spread"
+      ],
+      "prompt": "¿Qué son el destructuring, el spread y el rest?",
+      "answer": "**Destructuring** extrae valores de objetos y arrays a variables, con valores por defecto y renombrado:\n\n```js\nconst { nombre, edad = 0, direccion: { ciudad } = {} } = usuario;\nconst [primero, , tercero, ...resto] = lista;\n\n// Muy usado en parámetros, que documenta la firma:\nfunction crear({ titulo, autor, publicado = false }) { }\n```\n\n**Spread (`...`)** expande: copia superficial de objetos y arrays, concatena, pasa argumentos.\n\n```js\nconst nuevo = { ...anterior, leido: true };   // el último gana\nconst juntos = [...a, ...b];\nMath.max(...numeros);\n```\n\n**Rest (`...`)** es la misma sintaxis en posición de recogida: agrupa lo que sobra.\n\n```js\nfunction suma(...numeros) { }\nconst { id, ...sinId } = objeto;   // quitar una propiedad sin mutar\n```\n\nEl orden importa en el spread de objetos: `{ ...a, ...b }` deja ganar a `b`. Ese es el idioma para \"valores por defecto más overrides\".",
+      "rubric": {
+        "junior": "Usa las tres formas con ejemplos correctos.",
+        "mid": "Usa destructuring en parámetros con valores por defecto y rest para omitir propiedades.",
+        "senior": "Señala que el spread es copia superficial y sus implicaciones, aprovecha el orden de precedencia para defaults, y advierte de que destructurar profundamente sin defaults lanza si un nivel intermedio es undefined."
+      },
+      "followUps": [
+        "¿Cómo quitas una propiedad de un objeto sin mutarlo?",
+        "¿Qué pasa al destructurar un nivel anidado que no existe?"
+      ]
+    },
+    {
+      "id": "js-q013",
+      "level": "junior",
+      "topic": "Tipos",
+      "tags": [
+        "truthy",
+        "coercion"
+      ],
+      "prompt": "¿Qué valores son falsy y qué diferencia hay entre || y ??",
+      "answer": "Hay exactamente **ocho** valores falsy: `false`, `0`, `-0`, `0n`, `''`, `null`, `undefined`, `NaN`. Todo lo demás es truthy, incluidos `[]`, `{}` y `'0'`.\n\nDe ahí la diferencia crítica entre los dos operadores:\n\n- **`||`** devuelve el derecho si el izquierdo es **falsy**.\n- **`??`** (nullish coalescing) devuelve el derecho solo si el izquierdo es **`null` o `undefined`**.\n\n```js\nconst cantidad = 0;\ncantidad || 10;   // 10  ← bug: 0 es un valor válido\ncantidad ?? 10;   // 0   ← correcto\n\nconst nombre = '';\nnombre || 'Anónimo';   // 'Anónimo'\nnombre ?? 'Anónimo';   // ''\n```\n\nEste es uno de los bugs más frecuentes y difíciles de ver en revisión: valores por defecto que pisan un `0` legítimo, un string vacío o un `false`. Para valores por defecto usa `??`, salvo que de verdad quieras tratar `0` y `''` como ausentes.",
+      "rubric": {
+        "junior": "Enumera los falsy principales y sabe qué hace ||.",
+        "mid": "Explica la diferencia con ?? y da el ejemplo del 0 pisado por el valor por defecto.",
+        "senior": "Trata la elección como decisión de modelado (¿es 0 un valor válido en este dominio?), y menciona ?. y ??= como parte de la misma familia de operadores nullish."
+      },
+      "followUps": [
+        "¿[] es truthy o falsy?",
+        "¿Qué hace el operador ?."
+      ]
+    },
+    {
+      "id": "js-q014",
+      "level": "junior",
+      "topic": "DOM",
+      "tags": [
+        "dom",
+        "eventos"
+      ],
+      "prompt": "¿Cómo funciona el manejo de eventos en el DOM?",
+      "answer": "Un evento viaja en **tres fases**:\n\n1. **Captura**: desde `window` hacia abajo, hasta el elemento.\n2. **Target**: llega al elemento.\n3. **Burbujeo**: sube de vuelta hasta `window`.\n\nPor defecto los listeners se registran en la fase de **burbujeo**; el tercer parámetro (`{ capture: true }`) los pone en la de captura.\n\n```js\nelemento.addEventListener('click', manejador);\nelemento.removeEventListener('click', manejador); // necesita la MISMA referencia\n```\n\nDe ahí el error más común: registrar una función anónima y no poder quitarla nunca. `removeEventListener` compara por identidad.\n\nDos métodos que se confunden:\n- `stopPropagation()` impide que el evento siga viajando.\n- `preventDefault()` impide la acción por defecto del navegador (enviar el formulario, seguir el enlace). No detiene la propagación.\n\nY la técnica que vale la pena conocer: **delegación**. Un solo listener en el contenedor, usando `event.target` para saber qué hijo se pulsó. Con mil filas son mil listeners menos, y funciona con filas añadidas después.",
+      "rubric": {
+        "junior": "Usa addEventListener y conoce preventDefault.",
+        "mid": "Explica las tres fases, distingue stopPropagation de preventDefault y sabe delegar eventos.",
+        "senior": "Menciona la delegación como decisión de rendimiento y de dinamismo, las opciones `once` y `passive` (y su efecto en el scroll), y AbortController como forma limpia de dar de baja varios listeners a la vez."
+      },
+      "followUps": [
+        "¿Cómo quitas varios listeners de golpe?",
+        "¿Qué hace { passive: true } en un listener de scroll?"
+      ]
+    },
+    {
+      "id": "js-q015",
+      "level": "junior",
+      "topic": "Objetos",
+      "tags": [
+        "json",
+        "serializacion"
+      ],
+      "prompt": "¿Qué pasa al serializar con JSON.stringify?",
+      "answer": "`JSON.stringify` convierte a texto, pero **JSON no representa todo lo que hay en JavaScript**:\n\n```js\nJSON.stringify({\n  a: undefined,          // desaparece la clave\n  b: function () {},     // desaparece la clave\n  c: Symbol(),           // desaparece la clave\n  d: NaN,                // → null\n  e: Infinity,           // → null\n  f: new Date(),         // → string ISO (¡no vuelve como Date!)\n  g: new Map([[1, 2]]),  // → {}  (se pierde el contenido)\n});\n// '{\"d\":null,\"e\":null,\"f\":\"2026-09-21T...\"}'\n```\n\nEn un **array**, `undefined` y las funciones se convierten en `null` en vez de desaparecer, porque no se pueden quitar posiciones.\n\nY las **referencias circulares lanzan** `TypeError`.\n\nControles útiles: el segundo parámetro (replacer) filtra o transforma propiedades, el tercero indenta, y un método `toJSON()` en tu clase decide cómo se serializa. `BigInt` lanza salvo que le des un replacer.\n\nEl caso que más muerde en producción: guardar un objeto con fechas, recuperarlo, y encontrarte strings donde esperabas `Date`.",
+      "rubric": {
+        "junior": "Sabe convertir a JSON y de vuelta.",
+        "mid": "Conoce las pérdidas (undefined, funciones, Date) y el fallo con referencias circulares.",
+        "senior": "Usa replacer y toJSON para controlar la serialización, y trata la revivificación de tipos (fechas, decimales) como un problema de frontera que hay que resolver explícitamente al parsear."
+      },
+      "followUps": [
+        "¿Cómo recuperas las fechas al parsear?",
+        "¿Para qué sirve el método toJSON?"
+      ]
+    },
+    {
+      "id": "js-q016",
+      "level": "junior",
+      "topic": "Módulos",
+      "tags": [
+        "modulos"
+      ],
+      "prompt": "¿Qué diferencia hay entre módulos ES y CommonJS?",
+      "answer": "**CommonJS** (`require` / `module.exports`) es el sistema histórico de Node: **síncrono** y resuelto en **tiempo de ejecución**, así que puedes hacer `require` dentro de un `if`.\n\n**Módulos ES** (`import` / `export`) es el estándar del lenguaje: **estático**, las importaciones se resuelven antes de ejecutar nada.\n\nEsa diferencia tiene una consecuencia grande: como los imports son estáticos y analizables, los bundlers pueden hacer **tree shaking** y eliminar lo que no se usa. Con CommonJS eso no es demostrable en general.\n\nOtras diferencias:\n- Los módulos ES están **siempre en modo estricto** y `this` de nivel superior es `undefined`.\n- Los imports son **bindings vivos**: si el módulo origen cambia el valor exportado, lo ves. `require` te da una copia del valor en ese instante.\n- Soportan **top-level await**.\n- En Node se distinguen por `\"type\": \"module\"` en el package.json o por la extensión `.mjs`.\n\nPara carga dinámica en ESM está `import()`, que devuelve una promesa y es la base del code splitting.",
+      "rubric": {
+        "junior": "Distingue la sintaxis de ambos y sabe cuál usar hoy.",
+        "mid": "Explica estático frente a dinámico y lo relaciona con el tree shaking.",
+        "senior": "Menciona los bindings vivos, el modo estricto implícito, top-level await, y el coste real de la interoperabilidad entre ambos sistemas en Node y en los bundlers."
+      },
+      "followUps": [
+        "¿Por qué ESM permite tree shaking y CommonJS no?",
+        "¿Qué es un binding vivo?"
+      ]
+    },
+    {
+      "id": "js-q017",
+      "level": "junior",
+      "topic": "Herramientas",
+      "tags": [
+        "depuracion"
+      ],
+      "prompt": "¿Cómo depuras JavaScript más allá de console.log?",
+      "answer": "`console.log` está bien, pero hay herramientas mejores para cada caso:\n\n**La consola tiene más métodos**: `console.table` para arrays de objetos (se lee infinitamente mejor), `console.group`, `console.time`/`timeEnd`, `console.trace` para ver la pila, `console.count`, y `console.assert`.\n\n**El depurador**: puntos de interrupción en DevTools, o `debugger;` en el código. La ventaja real no es parar: es poder **inspeccionar todo el scope**, evaluar expresiones en el contexto pausado y avanzar paso a paso. Los breakpoints **condicionales** son lo que te salva cuando el bug está en la iteración 847.\n\n**Para el DOM**: breakpoints de modificación de subárbol o de atributo, que te dicen **qué código** cambió el elemento.\n\n**Para red**: la pestaña Network, con throttling para reproducir condiciones lentas.\n\n**Para rendimiento**: el perfilador con su gráfico de llamas, que es la única forma honesta de saber dónde se va el tiempo.\n\nY en Node: `node --inspect` conecta las DevTools de Chrome al proceso.\n\nUn detalle práctico: los **source maps** tienen que estar bien configurados, o depurarás el bundle minificado y no tu código.",
+      "rubric": {
+        "junior": "Usa console.log y los breakpoints básicos de DevTools.",
+        "mid": "Usa breakpoints condicionales, inspecciona el scope y conoce varios métodos de console.",
+        "senior": "Elige la herramienta según el síntoma (DOM, red, rendimiento, memoria), depura Node con --inspect, y trata los source maps como parte de la configuración del proyecto y no como un detalle."
+      },
+      "followUps": [
+        "¿Cómo pones un breakpoint condicional?",
+        "¿Cómo averiguas qué código modificó un nodo del DOM?"
+      ]
+    },
+    {
+      "id": "js-q018",
+      "level": "mid",
+      "topic": "Runtime",
+      "tags": [
+        "event loop"
+      ],
+      "prompt": "Explica el event loop: call stack, task queue y microtasks.",
+      "answer": "JavaScript tiene **un solo hilo** y una pila de llamadas. Lo que le permite no bloquear es delegar el trabajo asíncrono al entorno (navegador o Node) y recoger los resultados por colas.\n\nPiezas:\n- **Call stack**: lo que se está ejecutando ahora.\n- **Macrotask queue**: `setTimeout`, `setInterval`, eventos de I/O, eventos del DOM.\n- **Microtask queue**: callbacks de promesas, `queueMicrotask`, `MutationObserver`.\n\nEl ciclo: ejecutar todo el código síncrono hasta vaciar la pila → **vaciar la cola de microtasks entera** → coger **una** macrotask → vaciar microtasks otra vez → y en el navegador, renderizar si toca.\n\nLa clave es esa asimetría: **todas** las microtasks, pero **una** macrotask por vuelta.\n\n```js\nconsole.log('1');\nsetTimeout(() => console.log('2'), 0);\nPromise.resolve().then(() => console.log('3'));\nconsole.log('4');\n// 1, 4, 3, 2\n```\n\nConsecuencia práctica: un microtask que se replanifica a sí mismo **congela la página**, porque la cola nunca se vacía y el render nunca llega a ejecutarse.",
+      "rubric": {
+        "junior": "Sabe que JS es de un hilo y que setTimeout no bloquea.",
+        "mid": "Distingue las dos colas, su prioridad, y predice el orden del ejemplo.",
+        "senior": "Explica el bloqueo por microtasks recursivos, sitúa el render dentro del ciclo (por qué un bucle síncrono largo congela la UI), y menciona que en Node hay fases adicionales con process.nextTick por delante de las microtasks."
+      },
+      "followUps": [
+        "¿Dónde encaja el repintado del navegador?",
+        "¿Qué es process.nextTick en Node?"
+      ]
+    },
+    {
+      "id": "js-q019",
+      "level": "mid",
+      "topic": "Objetos",
+      "tags": [
+        "prototipos",
+        "herencia"
+      ],
+      "prompt": "¿Cómo funciona la herencia por prototipos?",
+      "answer": "Cada objeto tiene un enlace interno `[[Prototype]]` a otro objeto. Al buscar una propiedad, el motor mira en el objeto; si no está, sube por la **cadena de prototipos** hasta encontrarla o llegar a `null`.\n\n```js\nfunction Animal(nombre) { this.nombre = nombre; }\nAnimal.prototype.hablar = function () { return `${this.nombre} hace ruido`; };\n\nconst perro = new Animal('Rex');\nperro.hablar();          // no está en perro: se encuentra en Animal.prototype\nObject.getPrototypeOf(perro) === Animal.prototype;  // true\n```\n\nEl punto que más confunde: **`prototype` y `__proto__` no son lo mismo**. `prototype` es una propiedad de las **funciones constructoras**, y es el objeto que se asignará como prototipo de las instancias. `__proto__` (mejor: `Object.getPrototypeOf`) es el enlace real de **cualquier objeto** a su prototipo.\n\nLas `class` de ES6 son **azúcar sintáctico** sobre esto: `extends` enlaza los prototipos, `super` sube por la cadena. No hay clases de verdad debajo.\n\nPor qué importa: es lo que permite que todas las instancias compartan los métodos en vez de tener una copia cada una. Y mutar un prototipo nativo (`Array.prototype.miMetodo = ...`) afecta a todo el programa: por eso es una mala práctica reconocida.",
+      "rubric": {
+        "junior": "Sabe que los objetos heredan de un prototipo y que class existe.",
+        "mid": "Explica la cadena de búsqueda, distingue prototype de __proto__, y sabe que class es azúcar.",
+        "senior": "Habla del coste de las cadenas largas en la búsqueda de propiedades, de por qué no se deben extender los prototipos nativos (colisiones futuras con el estándar), y de Object.create como forma directa de composición sin constructores."
+      },
+      "followUps": [
+        "¿Qué diferencia hay entre prototype y __proto__?",
+        "¿Por qué no extender Array.prototype?"
+      ]
+    },
+    {
+      "id": "js-q020",
+      "level": "mid",
+      "topic": "Rendimiento",
+      "tags": [
+        "debounce",
+        "throttle"
+      ],
+      "prompt": "¿Qué diferencia hay entre debounce y throttle, y cuándo usas cada uno?",
+      "answer": "Los dos limitan la frecuencia de ejecución, pero con criterios opuestos:\n\n- **Debounce**: espera a que **pare** la actividad. Cada evento reinicia el temporizador; la función se ejecuta N ms después del último evento. \"Avísame cuando termine.\"\n- **Throttle**: ejecuta **como mucho una vez cada N ms**, pase lo que pase. \"Avísame como mucho cada tanto.\"\n\nEl criterio de elección: **¿me interesa solo el estado final, o el progreso?**\n\n- Buscador mientras escribes, validación de formulario, autoguardado → **debounce**. Solo importa lo último.\n- Scroll, resize, mousemove, barra de progreso → **throttle**. Si haces debounce en un scroll, no pasa nada hasta que el usuario se para, y la UI parece rota.\n\n```js\nfunction debounce(fn, ms) {\n  let id;\n  return (...args) => {\n    clearTimeout(id);\n    id = setTimeout(() => fn(...args), ms);\n  };\n}\n\nfunction throttle(fn, ms) {\n  let ultimo = 0;\n  return (...args) => {\n    const ahora = Date.now();\n    if (ahora - ultimo >= ms) { ultimo = ahora; fn(...args); }\n  };\n}\n```\n\nY para animaciones ligadas al scroll, lo correcto no es ninguno de los dos: es `requestAnimationFrame`, que se sincroniza con el repintado.",
+      "rubric": {
+        "junior": "Sabe que ambos limitan llamadas y nombra un caso de cada uno.",
+        "mid": "Implementa los dos y elige correctamente según si importa el estado final o el progreso.",
+        "senior": "Contempla las variantes (leading/trailing edge), la cancelación al desmontar, y sabe que para trabajo visual ligado al scroll la respuesta es requestAnimationFrame o IntersectionObserver, no un temporizador."
+      },
+      "followUps": [
+        "¿Qué es leading edge en un debounce?",
+        "¿Por qué rAF es mejor que throttle para animar con el scroll?"
+      ]
+    },
+    {
+      "id": "js-q021",
+      "level": "mid",
+      "topic": "Asincronía",
+      "tags": [
+        "cancelacion",
+        "fetch"
+      ],
+      "prompt": "¿Cómo se cancela una petición en vuelo?",
+      "answer": "Con **`AbortController`**, que es el mecanismo estándar de cancelación de la plataforma.\n\n```js\nconst controller = new AbortController();\nfetch(url, { signal: controller.signal })\n  .then(r => r.json())\n  .catch(e => {\n    if (e.name === 'AbortError') return;   // cancelación esperada, no es un error\n    throw e;\n  });\n\ncontroller.abort();   // cancela\n```\n\nPuntos importantes:\n\n- La `signal` sirve para **mucho más que fetch**: `addEventListener(..., { signal })` da de baja el listener al abortar, lo que permite limpiar decenas de listeners con una sola llamada. También la aceptan varias APIs modernas.\n- Un aborto produce un rechazo con `name === 'AbortError'`. **Hay que distinguirlo de un error real**, o el usuario verá mensajes de fallo cada vez que navegue rápido.\n- `AbortSignal.timeout(ms)` crea una señal que aborta sola: es la forma moderna de poner un timeout, mucho más limpia que un `Promise.race`.\n\nEl caso de uso canónico es el buscador: al escribir una consulta nueva, abortar la anterior evita tanto la carga inútil como la condición de carrera de que una respuesta vieja pise a la nueva.",
+      "rubric": {
+        "junior": "Conoce AbortController y lo usa con fetch.",
+        "mid": "Distingue AbortError de un fallo real y lo aplica al caso del buscador.",
+        "senior": "Usa la signal para listeners y otras APIs, conoce AbortSignal.timeout y AbortSignal.any, y sabe que abortar el fetch no cancela el trabajo ya hecho en el servidor."
+      },
+      "followUps": [
+        "¿Cómo das de baja veinte listeners de una vez?",
+        "¿Abortar un fetch para el trabajo en el servidor?"
+      ]
+    },
+    {
+      "id": "js-q022",
+      "level": "mid",
+      "topic": "Rendimiento",
+      "tags": [
+        "memoria",
+        "fugas"
+      ],
+      "prompt": "¿Cómo se produce una fuga de memoria en JavaScript y cómo la encuentras?",
+      "answer": "El recolector libera lo que no es **alcanzable** desde las raíces. Una fuga es algo que ya no necesitas pero sigue siendo alcanzable.\n\nCausas habituales:\n1. **Listeners no dados de baja**, sobre todo en `window` o `document`: el closure mantiene vivo todo lo que capturó, incluidos nodos del DOM.\n2. **Temporizadores vivos**: un `setInterval` que nadie limpia retiene su callback y su closure para siempre.\n3. **Nodos DOM desprendidos**: guardas una referencia a un elemento que quitaste del documento. El nodo y todo su subárbol siguen en memoria.\n4. **Cachés y arrays globales que solo crecen.**\n5. **Closures que capturan más de lo necesario**, típicamente dentro de un módulo de larga vida.\n\nDiagnóstico en DevTools → Memory:\n- **Heap snapshots comparados**: uno antes, ejecutar el flujo varias veces, volver al inicio, forzar GC, otro snapshot. Compara y busca lo que creció.\n- **Retainers**: la pregunta útil no es \"qué hay de más\" sino **\"quién lo está reteniendo\"**. Ese panel te lo dice.\n- **Allocation timeline** para ver qué se asigna y no se libera.\n\nHerramientas del lenguaje: `WeakMap`, `WeakSet` y `WeakRef` mantienen referencias que **no impiden la recolección**, ideales para asociar metadatos a objetos sin retenerlos.",
+      "rubric": {
+        "junior": "Sabe que hay que quitar listeners y limpiar intervalos.",
+        "mid": "Enumera las causas típicas y usa snapshots comparados en DevTools.",
+        "senior": "Usa el panel de retainers para encontrar al culpable en vez de adivinar, conoce WeakMap/WeakRef y su papel, y distingue una fuga real de una caché que crece por diseño."
+      },
+      "followUps": [
+        "¿Para qué sirve un WeakMap?",
+        "¿Qué es un nodo DOM desprendido?"
+      ]
+    },
+    {
+      "id": "js-q023",
+      "level": "mid",
+      "topic": "Objetos",
+      "tags": [
+        "clases",
+        "privado"
+      ],
+      "prompt": "¿Cómo funcionan las clases modernas de JavaScript?",
+      "answer": "```js\nclass Cuenta {\n  #saldo = 0;                  // campo privado de verdad\n  static tipo = 'corriente';   // campo estático\n\n  constructor(titular) { this.titular = titular; }\n\n  get saldo() { return this.#saldo; }\n\n  ingresar(cantidad) {\n    if (cantidad <= 0) throw new RangeError('Cantidad inválida');\n    this.#saldo += cantidad;\n    return this;\n  }\n\n  #validar() { }              // método privado\n  static crear(t) { return new Cuenta(t); }\n}\n```\n\nLo que hay que saber:\n\n- **Los campos `#` son privados a nivel de lenguaje**, no por convención. Son inaccesibles desde fuera incluso con corchetes o reflexión, a diferencia del viejo `_nombre`. Acceder desde fuera es un **error de sintaxis**.\n- Las clases **no se elevan** de forma utilizable: usarlas antes de declararlas lanza.\n- Están siempre en **modo estricto**.\n- `extends` y `super` funcionan sobre la cadena de prototipos; hay que llamar a `super()` antes de usar `this` en un constructor derivado.\n- **Los campos definidos como arrow** (`metodo = () => {}`) se crean **por instancia** y llevan el `this` atado. Resuelve el problema de pasar métodos como callbacks, a costa de una función por instancia en vez de una compartida en el prototipo.\n\nY la advertencia de diseño: en JavaScript, la **composición** suele envejecer mejor que las jerarquías de herencia profundas.",
+      "rubric": {
+        "junior": "Define clases con constructor, métodos y extends.",
+        "mid": "Usa campos privados con #, getters y estáticos, y sabe llamar a super correctamente.",
+        "senior": "Distingue campos de instancia de métodos de prototipo y su coste en memoria, explica por qué # es privacidad real frente a la convención _, y defiende composición sobre herencia profunda."
+      },
+      "followUps": [
+        "¿Qué coste tiene declarar un método como campo arrow?",
+        "¿Por qué # es distinto de _nombre?"
+      ]
+    },
+    {
+      "id": "js-q024",
+      "level": "mid",
+      "topic": "Objetos",
+      "tags": [
+        "map",
+        "set"
+      ],
+      "prompt": "¿Cuándo usas Map en vez de un objeto, y Set en vez de un array?",
+      "answer": "**`Map` frente a objeto:**\n- Las **claves pueden ser de cualquier tipo**, incluidos objetos y funciones. En un objeto, toda clave se convierte en string (o symbol).\n- **Conserva el orden de inserción** de forma garantizada. Los objetos tienen reglas raras: las claves que parecen enteros se ordenan numéricamente primero.\n- `map.size` es O(1); contar claves de un objeto es O(n).\n- **No hereda nada**: un objeto literal arrastra `toString`, `constructor`, y el riesgo de colisión con `__proto__` (un vector de ataque real, prototype pollution).\n- Está optimizado para inserciones y borrados frecuentes.\n\nUsa objeto cuando la forma es fija y conocida (un registro, una configuración), y `Map` cuando es un diccionario dinámico con claves arbitrarias.\n\n**`Set` frente a array:**\n- Sin duplicados por construcción, y `has()` es **O(1)** frente al O(n) de `includes()`.\n- El patrón que más impacto tiene: sustituir `array.includes(x)` dentro de un bucle (O(n²)) por un `Set` (O(n)).\n\n```js\nconst vistos = new Set(idsProcesados);\nconst nuevos = items.filter(i => !vistos.has(i.id));   // O(n)\n```\n\nY ojo con `Set` de objetos: la unicidad es **por referencia**, no por contenido. Dos objetos iguales pero distintos entran los dos.",
+      "rubric": {
+        "junior": "Sabe que Map admite cualquier clave y Set no permite duplicados.",
+        "mid": "Compara complejidades y aplica el patrón de sustituir includes en bucle por un Set.",
+        "senior": "Menciona la prototype pollution como motivo de seguridad para preferir Map, sabe que Set compara objetos por referencia, y conoce WeakMap para metadatos que no deben retener."
+      },
+      "followUps": [
+        "¿Qué es la prototype pollution?",
+        "¿Cómo deduplicas un array de objetos por un campo?"
+      ]
+    },
+    {
+      "id": "js-q025",
+      "level": "mid",
+      "topic": "Asincronía",
+      "tags": [
+        "iteradores",
+        "generadores"
+      ],
+      "prompt": "¿Qué son los iteradores y los generadores?",
+      "answer": "Un **iterable** es cualquier objeto con un método `[Symbol.iterator]` que devuelve un **iterador**: un objeto con `next()` que da `{ value, done }`. Eso es lo que hace que `for...of`, el spread y el destructuring funcionen con arrays, strings, `Map`, `Set` y `NodeList`.\n\nUn **generador** (`function*`) es la forma cómoda de crear iteradores: `yield` produce un valor y **congela la función** hasta el siguiente `next()`.\n\n```js\nfunction* naturales() {\n  let n = 0;\n  while (true) yield n++;   // infinito, y no pasa nada\n}\n\nfunction* tomar(it, n) {\n  for (const v of it) { if (n-- <= 0) return; yield v; }\n}\n\n[...tomar(naturales(), 5)];   // [0, 1, 2, 3, 4]\n```\n\nLa propiedad valiosa es la **pereza**: nada se calcula hasta que se consume, así que puedes trabajar con secuencias infinitas o muy costosas sin materializarlas.\n\nY los **generadores asíncronos** (`async function*` + `for await...of`) son la herramienta idiomática para consumir streams y APIs paginadas: escribes un bucle que va pidiendo páginas y el consumidor solo ve una secuencia continua de elementos.",
+      "rubric": {
+        "junior": "Sabe que for...of recorre iterables y ha visto function*.",
+        "mid": "Implementa un generador y explica la evaluación perezosa.",
+        "senior": "Usa generadores asíncronos para paginación y streams, sabe que next() puede recibir un valor (comunicación bidireccional), y conoce el coste de un generador frente a un bucle plano en rutas calientes."
+      },
+      "followUps": [
+        "¿Cómo recorrerías una API paginada con for await?",
+        "¿Qué hace pasarle un argumento a next()?"
+      ]
+    },
+    {
+      "id": "js-q026",
+      "level": "mid",
+      "topic": "Módulos",
+      "tags": [
+        "bundlers",
+        "build"
+      ],
+      "prompt": "¿Qué hace un bundler y por qué lo necesitas?",
+      "answer": "Un bundler (Vite, webpack, Rollup, esbuild) toma tu grafo de módulos y produce artefactos que el navegador pueda cargar bien. Sus trabajos:\n\n- **Resolver e integrar módulos**, incluidos los de `node_modules`, que el navegador no sabe localizar por nombre.\n- **Tree shaking**: eliminar exports que nadie importa. Solo es posible con módulos ES, porque los imports son estáticos y analizables.\n- **Code splitting**: partir el bundle en trozos que se cargan bajo demanda con `import()`. Es la herramienta principal para que la primera carga no traiga la aplicación entera.\n- **Transpilar** (TypeScript, JSX) y aplicar postprocesado de CSS.\n- **Minificar** y añadir hashes al nombre de los ficheros para poder cachearlos indefinidamente.\n- **Servidor de desarrollo** con recarga en caliente.\n\nHoy la distinción importante es de arquitectura: **Vite sirve módulos ES nativos en desarrollo** (arranque casi instantáneo, sin bundling previo) y usa Rollup para producción. Webpack empaqueta también en desarrollo, lo que en proyectos grandes significa esperas notables en cada arranque.\n\nLo que se descuida y sí importa: **medir el bundle**. Un analizador de tamaño y un presupuesto que falle el CI cuando se supere valen más que cualquier optimización puntual.",
+      "rubric": {
+        "junior": "Sabe que agrupa y minifica el código.",
+        "mid": "Explica tree shaking, code splitting y el hash para cacheo, y conoce la diferencia de Vite en desarrollo.",
+        "senior": "Trata el tamaño del bundle como presupuesto vigilado en CI, decide los puntos de división por rutas y por dependencias pesadas, y conoce el efecto del hashing en la estrategia de caché."
+      },
+      "followUps": [
+        "¿Dónde pondrías los puntos de code splitting?",
+        "¿Por qué Vite arranca más rápido en desarrollo?"
+      ]
+    },
+    {
+      "id": "js-q027",
+      "level": "mid",
+      "topic": "Testing",
+      "tags": [
+        "testing"
+      ],
+      "prompt": "¿Cómo estructuras los tests de una aplicación JavaScript?",
+      "answer": "Por niveles, con proporciones muy desiguales a propósito:\n\n- **Unitarios**: lógica pura, sin DOM ni red. Milisegundos. Aquí debería estar la mayor parte.\n- **De componente / integración**: renderizar de verdad e interactuar. Con Testing Library, la regla es **consultar como lo haría un usuario** (`getByRole`, `getByLabelText`) en vez de por clases CSS o ids internos. Un test que busca `.btn-primary` se rompe al refactorizar estilos sin que nada haya dejado de funcionar.\n- **End-to-end**: Playwright o Cypress sobre un navegador real. Pocos y bien elegidos: son lentos y propensos a fallos intermitentes.\n\nHerramientas: **Vitest** en proyectos con Vite (comparte configuración y es rápido), **Jest** en el resto, **MSW** para simular la red interceptando a nivel de fetch, lo que es más realista que mockear el módulo del cliente HTTP.\n\nLo que distingue una buena suite:\n- **Determinismo**. Nada de tiempo real ni de orden de ejecución. Timers falsos para probar un debounce sin esperar 300 ms de verdad.\n- **Probar comportamiento, no implementación.** Si renombrar una función interna rompe veinte tests, esos tests son un impuesto al refactor.\n- La cobertura sirve para **encontrar zonas sin probar**, no como objetivo. Un test sin assertions da cobertura y valor cero.",
+      "rubric": {
+        "junior": "Escribe tests unitarios con Jest o Vitest.",
+        "mid": "Conoce la pirámide, usa Testing Library con consultas accesibles y simula la red.",
+        "senior": "Critica la cobertura como objetivo, prioriza el determinismo, usa MSW para interceptar a nivel de red en vez de mockear módulos, y lee la dificultad de testear como señal de diseño."
+      },
+      "followUps": [
+        "¿Por qué getByRole y no querySelector?",
+        "¿Cómo pruebas un debounce sin esperar?"
+      ]
+    },
+    {
+      "id": "js-q028",
+      "level": "mid",
+      "topic": "Seguridad",
+      "tags": [
+        "seguridad",
+        "xss"
+      ],
+      "prompt": "¿Qué es XSS y cómo se previene?",
+      "answer": "**Cross-site scripting**: el atacante consigue que se ejecute JavaScript suyo en el contexto de tu página, con lo que puede leer cookies, tokens y el DOM, y actuar como el usuario.\n\nTres variantes: **almacenado** (el payload se guarda en tu base de datos, por ejemplo en un comentario), **reflejado** (viaja en la URL y se devuelve en la respuesta) y **basado en DOM** (el código vulnerable está en el cliente).\n\nPrevención, por orden de eficacia:\n\n1. **Escapar en la salida, según el contexto.** No es lo mismo insertar en HTML, en un atributo, en una URL o dentro de un `<script>`. Los frameworks modernos (React, Vue, Angular) escapan por defecto al interpolar, y ahí está el 90% de la protección.\n2. **Evitar las vías de escape**: `innerHTML`, `dangerouslySetInnerHTML`, `v-html`, `eval`. Si necesitas HTML de usuario, **sanitiza con DOMPurify**, nunca con una expresión regular propia.\n3. **Content Security Policy**: una cabecera que restringe de dónde se puede cargar y ejecutar script. Es la red de seguridad que limita el daño cuando lo anterior falla.\n4. **Cookies `HttpOnly`** para que el token de sesión no sea legible desde JavaScript, más `Secure` y `SameSite`.\n\nY el principio de fondo: **validar en la entrada es útil, pero escapar en la salida es lo obligatorio**, porque el mismo dato es peligroso o inocuo según dónde acabe.",
+      "rubric": {
+        "junior": "Sabe que no hay que insertar HTML del usuario y menciona innerHTML.",
+        "mid": "Distingue los tipos de XSS, usa sanitización con una librería y conoce CSP.",
+        "senior": "Articula que el escapado depende del contexto de salida, sitúa CSP como defensa en profundidad y no como solución, y conecta con la protección del token (HttpOnly) para acotar el impacto."
+      },
+      "followUps": [
+        "¿Qué diferencia hay entre validar la entrada y escapar la salida?",
+        "¿Para qué sirve HttpOnly?"
+      ]
+    },
+    {
+      "id": "js-q029",
+      "level": "mid",
+      "topic": "Rendimiento",
+      "tags": [
+        "rendimiento",
+        "web"
+      ],
+      "prompt": "La página tarda en cargar. ¿Cómo lo diagnosticas y qué atacas primero?",
+      "answer": "Primero **medir**, con métricas que representen lo que siente el usuario. Las Core Web Vitals:\n\n- **LCP** (Largest Contentful Paint): cuándo aparece el contenido principal. Objetivo < 2,5 s.\n- **INP** (Interaction to Next Paint): cuánto tarda la página en responder a una interacción. < 200 ms.\n- **CLS** (Cumulative Layout Shift): cuánto se mueve el contenido. < 0,1.\n\nHerramientas: Lighthouse para un diagnóstico guiado, la pestaña Performance para el detalle, y **datos de campo** (RUM) para saber qué pasa en dispositivos reales, que siempre son peores que tu portátil.\n\nQué atacar, en orden de retorno habitual:\n\n1. **Imágenes.** Casi siempre el mayor peso. Formatos modernos (AVIF, WebP), dimensiones correctas, `loading=\"lazy\"` para lo que está bajo el pliegue, y `width`/`height` declarados para no provocar CLS.\n2. **JavaScript.** Medir el bundle, dividir por rutas, cargar bajo demanda lo pesado, eliminar dependencias que se usan para una función pequeña.\n3. **Fuentes.** `font-display: swap`, precarga de la crítica, subsetting.\n4. **Cascada de red.** Preconnect a orígenes de terceros, evitar cadenas de peticiones dependientes, `preload` de lo crítico.\n5. **Terceros.** Analítica, chats y píxeles de marketing suelen ser el mayor coste y el menos vigilado.\n\nY la comprobación honesta: medir en móvil de gama media con red simulada lenta. En un portátil con fibra todo parece rápido.",
+      "rubric": {
+        "junior": "Menciona comprimir imágenes y reducir peticiones.",
+        "mid": "Conoce las Core Web Vitals, usa Lighthouse y prioriza imágenes y JavaScript.",
+        "senior": "Parte de datos de campo y no solo de laboratorio, ordena por retorno sobre esfuerzo, trata los scripts de terceros como coste vigilable, y conecta cada métrica con la causa técnica concreta."
+      },
+      "followUps": [
+        "¿Qué causa un CLS alto?",
+        "¿Por qué los datos de campo y no solo Lighthouse?"
+      ]
+    },
+    {
+      "id": "js-q030",
+      "level": "mid",
+      "topic": "Errores",
+      "tags": [
+        "errores"
+      ],
+      "prompt": "¿Cómo gestionas los errores en una aplicación JavaScript en producción?",
+      "answer": "En cuatro frentes:\n\n1. **Errores síncronos no capturados**: `window.onerror` o `window.addEventListener('error')`.\n2. **Promesas rechazadas sin `catch`**: `window.addEventListener('unhandledrejection')`. Este se olvida casi siempre y es donde acaban la mayoría de los fallos de red.\n3. **Errores de renderizado**: error boundaries en React, `errorCaptured` en Vue. Sin ellos, un fallo en un componente deja la pantalla en blanco.\n4. **Errores esperados del dominio**: un 401, un 404, una validación. **No son excepciones, son estados**. Se modelan y se pintan en la UI.\n\nPara que un error sea accionable hacen falta tres cosas que se descuidan:\n- **Source maps subidos** al servicio de errores. Sin ellos verás `a.b is not a function` en la línea 1 del bundle minificado, que no sirve de nada.\n- **Contexto**: qué usuario (por id, no datos personales), qué ruta, qué acción previa. Los breadcrumbs valen más que el propio stack.\n- **Agrupación y filtrado**. Las extensiones del navegador y los bots generan ruido constante; si no lo filtras, el panel se vuelve inútil y nadie lo mira.\n\nY clases de error propias (`class ApiError extends Error`) con un campo de código: permiten decidir programáticamente qué se reintenta, qué se reporta y qué se muestra.",
+      "rubric": {
+        "junior": "Usa try/catch y muestra un mensaje al usuario.",
+        "mid": "Captura errores globales incluidos los unhandledrejection e integra un servicio de reporte.",
+        "senior": "Distingue errores esperados de fallos, insiste en source maps y contexto para que el reporte sea accionable, y gestiona el ruido para que el panel conserve su señal."
+      },
+      "followUps": [
+        "¿Por qué son críticos los source maps en producción?",
+        "¿Cómo distingues un error del dominio de un bug?"
+      ]
+    },
+    {
+      "id": "js-q031",
+      "level": "mid",
+      "topic": "Navegador",
+      "tags": [
+        "almacenamiento"
+      ],
+      "prompt": "¿Qué opciones de almacenamiento hay en el navegador y cuál eliges?",
+      "answer": "- **`localStorage`**: ~5-10 MB, persiste indefinidamente, **síncrono** (bloquea el hilo principal) y solo strings. Bien para preferencias pequeñas; mal para cualquier cosa grande o frecuente.\n- **`sessionStorage`**: igual, pero se borra al cerrar la pestaña. Útil para estado de un flujo en curso.\n- **`IndexedDB`**: base de datos transaccional, **asíncrona**, con índices y cientos de MB. Es la opción correcta para datos de verdad y para offline. Su API cruda es incómoda, así que en la práctica se usa una envoltura (`idb`, Dexie).\n- **Cookies**: ~4 KB y **se envían en cada petición**, lo que las hace caras. Su papel es la sesión, con `HttpOnly`, `Secure` y `SameSite`.\n- **Cache API**: respuestas HTTP, la base de los service workers y del funcionamiento offline.\n\nCriterios: ¿cuánto pesa? ¿necesito consultar y filtrar? ¿el servidor lo necesita en cada petición? ¿es sensible?\n\nY lo que hay que asumir siempre: **el almacenamiento del navegador puede desaparecer**. Modo incógnito, borrado por presión de disco, el usuario limpiando datos. Todo lo que guardes es una **caché**, no una fuente de verdad, y el código tiene que funcionar cuando está vacío o cuando el acceso lanza una excepción.\n\nY nunca guardes tokens de sesión en `localStorage`: cualquier XSS los lee.",
+      "rubric": {
+        "junior": "Conoce localStorage y las cookies.",
+        "mid": "Elige IndexedDB para volumen, sabe que localStorage es síncrono y que las cookies viajan en cada petición.",
+        "senior": "Trata el almacenamiento como caché descartable y programa para que falte, conoce la persistencia por presión de disco, y descarta localStorage para tokens por su exposición a XSS."
+      },
+      "followUps": [
+        "¿Por qué localStorage es mala idea para un token?",
+        "¿Cuándo se borra el almacenamiento sin que el usuario lo pida?"
+      ]
+    },
+    {
+      "id": "js-q032",
+      "level": "mid",
+      "topic": "Navegador",
+      "tags": [
+        "workers"
+      ],
+      "prompt": "¿Qué es un Web Worker y cuándo lo usarías?",
+      "answer": "Un hilo aparte que ejecuta JavaScript **sin bloquear el hilo principal**, que es el que dibuja y atiende la interacción.\n\nCuándo compensa: cálculo pesado que congelaría la UI. Procesar imágenes, parsear o transformar un CSV o JSON grande, criptografía, compresión, cálculos de un editor.\n\n```js\nconst worker = new Worker(new URL('./calculo.js', import.meta.url), {\n  type: 'module',\n});\nworker.postMessage(datos);\nworker.onmessage = (e) => pintar(e.data);\n```\n\nLo que hay que asumir:\n- **No comparten memoria** (salvo `SharedArrayBuffer`, que requiere cabeceras COOP/COEP). Los mensajes se **copian** con el algoritmo de clonado estructurado, y esa copia es O(tamaño): con datos grandes puede costar más que el cálculo. Los `ArrayBuffer` se pueden **transferir** sin copia, cediendo la propiedad.\n- **No tienen acceso al DOM.** Solo cálculo y APIs como `fetch` e `IndexedDB`.\n- Crear un worker tiene coste, así que para tareas pequeñas no compensa. Para volumen sostenido, un pool.\n\nUn pariente importante es el **Service Worker**, que no sirve para cálculo sino como proxy de red: caché, offline y notificaciones push.",
+      "rubric": {
+        "junior": "Sabe que ejecuta código en paralelo sin bloquear la página.",
+        "mid": "Conoce la comunicación por mensajes, la ausencia de DOM, y da casos de uso concretos.",
+        "senior": "Cuantifica el coste de clonado y usa objetos transferibles, distingue Web Worker de Service Worker por propósito, y decide entre worker puntual o pool según el volumen."
+      },
+      "followUps": [
+        "¿Qué diferencia hay entre un Web Worker y un Service Worker?",
+        "¿Qué es un objeto transferible?"
+      ]
+    },
+    {
+      "id": "js-q033",
+      "level": "mid",
+      "topic": "Funciones",
+      "tags": [
+        "funcional",
+        "inmutabilidad"
+      ],
+      "prompt": "¿Qué aporta el estilo funcional en JavaScript y dónde tiene límites?",
+      "answer": "Las ideas útiles, sin dogma:\n\n- **Funciones puras**: mismo input, mismo output, sin efectos secundarios. Son triviales de probar (no hay que montar nada), de cachear y de paralelizar. Debería ser la forma por defecto de la lógica de negocio.\n- **Inmutabilidad**: no mutar, devolver nuevo. Hace la igualdad por referencia significativa, que es la base de las optimizaciones de React (`memo`, `useMemo`) y del time-travel debugging.\n- **Composición**: funciones pequeñas que se combinan, en vez de una función grande con banderas.\n- **Funciones de orden superior**: `map`, `filter`, `reduce` describen **qué** quieres, no **cómo** recorrer.\n\nDónde están los límites, y esto es lo que distingue el criterio del entusiasmo:\n\n- **Rendimiento**: copiar estructuras grandes en cada cambio tiene coste real. Para eso existen las estructuras persistentes (Immer, que además permite escribir código aparentemente mutable).\n- **Legibilidad**: una cadena de diez `.map().filter().reduce()` puede ser mucho más difícil de leer y depurar que un `for` claro. `reduce` en particular se usa a menudo donde un bucle sería más honesto.\n- **La mayoría de programas útiles necesitan efectos**: red, DOM, disco. El objetivo no es eliminarlos, es **empujarlos a los bordes** y mantener el núcleo puro.\n\nEl criterio: aplícalo donde reduce el coste de razonar, no como identidad.",
+      "rubric": {
+        "junior": "Usa map, filter y reduce y sabe que no debe mutar.",
+        "mid": "Explica pureza, inmutabilidad y composición con beneficios concretos.",
+        "senior": "Nombra los límites: coste de copia, legibilidad de las cadenas largas, y el principio de núcleo puro con efectos en los bordes. Conoce Immer y las estructuras persistentes."
+      },
+      "followUps": [
+        "¿Cuándo un for es mejor que un reduce?",
+        "¿Qué problema resuelve Immer?"
+      ]
+    },
+    {
+      "id": "js-q034",
+      "level": "mid",
+      "topic": "Rendimiento",
+      "tags": [
+        "optimizacion",
+        "algoritmos"
+      ],
+      "prompt": "Este código tarda minutos con 50.000 registros. ¿Qué está mal?\n\n```js\nconst resultado = [];\nfor (const pedido of pedidos) {\n  const cliente = clientes.find(c => c.id === pedido.clienteId);\n  const items = lineas.filter(l => l.pedidoId === pedido.id);\n  resultado.push({ ...pedido, cliente, items });\n}\n```",
+      "answer": "Dos recorridos completos **dentro** del bucle, así que el algoritmo es O(n·m) y se dispara con el volumen.\n\n1. `find` recorre `clientes` entero en cada iteración.\n2. `filter` recorre `lineas` **entero** en cada iteración y encima no puede parar antes, porque tiene que recoger todas las coincidencias. Con 50.000 pedidos y 200.000 líneas son 10.000 millones de comparaciones.\n\nLa corrección no es micro-optimizar el bucle: es **indexar una sola vez** y cambiar la complejidad.\n\n```js\n// Un índice por clave: O(n) para construirlo, O(1) para consultar.\nconst clientePorId = new Map(clientes.map(c => [c.id, c]));\n\n// Agrupación en una pasada. Object.groupBy también sirve si tu runtime lo tiene.\nconst lineasPorPedido = new Map();\nfor (const l of lineas) {\n  let grupo = lineasPorPedido.get(l.pedidoId);\n  if (!grupo) lineasPorPedido.set(l.pedidoId, (grupo = []));\n  grupo.push(l);\n}\n\nconst resultado = pedidos.map(p => ({\n  ...p,\n  cliente: clientePorId.get(p.clienteId),\n  items: lineasPorPedido.get(p.id) ?? [],\n}));\n```\n\nPasa de O(n·m) a O(n + m).\n\nDos detalles más: `find` devuelve `undefined` si no encuentra nada y el código original no lo contempla (bug latente); y el `?? []` evita que un pedido sin líneas dé `undefined` donde el consumidor espera un array.",
+      "rubric": {
+        "junior": "Ve que hay búsquedas dentro de un bucle y que será lento.",
+        "mid": "Identifica la complejidad O(n·m) y propone indexar con Map para bajar a O(n+m).",
+        "senior": "Construye ambos índices en una pasada, señala el bug latente del find sin resultado, devuelve un array vacío en vez de undefined, y menciona que si los datos vienen de una base de datos el join correcto es del servidor, no del cliente."
+      },
+      "followUps": [
+        "¿Qué hace Object.groupBy?",
+        "¿Y si los datos vienen de una API? ¿Dónde debería hacerse este join?"
+      ]
+    },
+    {
+      "id": "js-q035",
+      "level": "senior",
+      "topic": "Runtime",
+      "tags": [
+        "motor",
+        "v8"
+      ],
+      "prompt": "¿Cómo ejecuta V8 tu código y qué implica para escribirlo?",
+      "answer": "V8 tiene un pipeline de varios niveles: **Ignition** interpreta el bytecode y recoge información de tipos en ejecución; si una función se ejecuta mucho, **Sparkplug** y luego **TurboFan** la compilan a código máquina optimizado usando esos tipos observados.\n\nLa pieza clave son las **hidden classes** (shapes). V8 asigna a cada objeto una forma interna según su conjunto de propiedades y el **orden** en que se añadieron. Si mil objetos comparten forma, el acceso a sus propiedades se compila a un offset fijo, casi tan rápido como un struct de C.\n\nDe ahí salen consecuencias prácticas:\n\n- **Inicializa todas las propiedades en el constructor, en el mismo orden.** Añadir propiedades después crea formas nuevas y degrada el acceso.\n- **Los sitios de llamada monomórficos** (los que siempre reciben la misma forma) se optimizan mucho mejor que los polimórficos. Una función que recibe cinco formas distintas se queda sin optimizar (megamórfica).\n- **Cambiar el tipo de una propiedad** (de número a string) invalida el código optimizado: es una **deoptimización**.\n- **Los arrays tienen \"elements kinds\"**: un array solo de enteros pequeños es mucho más rápido que uno mixto. Meter un string en un array de números lo degrada de forma irreversible. Y los **huecos** (`arr[1000] = 1` en un array de 3) lo convierten en disperso, que es un modo mucho más lento.\n\nEl matiz importante: **esto solo importa en rutas calientes y medidas**. Escribir todo el código pensando en hidden classes es optimización prematura; saberlo sirve cuando el perfilador te lleva a una función concreta.",
+      "rubric": {
+        "junior": "Sabe que el motor compila JIT.",
+        "mid": "Conoce el concepto de hidden classes y que la consistencia de forma ayuda al motor.",
+        "senior": "Explica monomorfismo y deoptimización, conoce los elements kinds de los arrays y el coste de los huecos, y encuadra todo esto como algo que solo se aplica tras medir."
+      },
+      "followUps": [
+        "¿Por qué un array con huecos es más lento?",
+        "¿Qué provoca una deoptimización?"
+      ]
+    },
+    {
+      "id": "js-q036",
+      "level": "senior",
+      "topic": "Runtime",
+      "tags": [
+        "gc",
+        "memoria"
+      ],
+      "prompt": "¿Cómo funciona la recolección de basura en V8?",
+      "answer": "GC **generacional**, sobre la observación de que la mayoría de los objetos mueren jóvenes:\n\n- **Young generation (scavenger)**: espacio pequeño, dividido en dos semiespacios. Al recolectar, se **copian los supervivientes** al otro semiespacio y el resto se descarta de golpe. El coste es proporcional a lo que **sobrevive**, no a lo que muere: por eso crear muchos objetos efímeros es sorprendentemente barato. Un objeto que sobrevive a dos recolecciones se promociona.\n- **Old generation (Mark-Compact)**: marcado, barrido y compactación. Aquí sí duele.\n\nV8 hace mucho trabajo para no provocar pausas visibles: marcado **concurrente** (en hilos aparte mientras tu código corre), **incremental** (troceado) y **perezoso** en el barrido. El nombre del proyecto es Orinoco.\n\nQué significa para quien escribe código:\n\n- **La presión viene de los objetos que sobreviven**, no del número de asignaciones. Una caché sin límite es lo peor que puedes hacer: promociona objetos a old space y los mantiene vivos, donde recolectar es caro.\n- En una animación a 60 fps tienes 16 ms por frame: una pausa de GC ahí se ve. Reducir asignaciones en el bucle de animación (reutilizar objetos, evitar closures por frame) es de las pocas micro-optimizaciones que se justifican.\n- **`WeakMap`, `WeakSet` y `WeakRef`** permiten asociar datos a un objeto sin impedir su recolección. Es la herramienta correcta para metadatos y cachés por instancia.\n\nY siempre: diagnosticar con snapshots y el panel de retainers, no por intuición.",
+      "rubric": {
+        "junior": "Sabe que la memoria se libera sola.",
+        "mid": "Conoce el modelo generacional y que los objetos jóvenes se recolectan barato.",
+        "senior": "Explica por qué el scavenger escala con los supervivientes, conoce el marcado concurrente e incremental, relaciona la presión de GC con el jank de animación, y usa las referencias débiles con criterio."
+      },
+      "followUps": [
+        "¿Por qué una caché sin límite es cara para el GC?",
+        "¿Cuándo usarías un WeakRef?"
+      ]
+    },
+    {
+      "id": "js-q037",
+      "level": "senior",
+      "topic": "Arquitectura",
+      "tags": [
+        "rendering",
+        "ssr"
+      ],
+      "prompt": "SSR, SSG, CSR, ISR y streaming: ¿cuándo usas cada estrategia?",
+      "answer": "- **CSR**: el servidor manda un HTML casi vacío y JavaScript lo construye todo. Primera carga lenta, sin SEO sin trabajo extra, pero navegación posterior muy fluida. Es lo correcto para una aplicación tras login: un panel de administración no necesita SEO.\n- **SSG**: HTML generado en tiempo de build. Lo más rápido posible y cacheable en CDN. Para contenido que cambia poco: documentación, blog, marketing. Su límite es el tiempo de build cuando hay decenas de miles de páginas.\n- **SSR**: HTML generado en cada petición. Necesario cuando el contenido es personalizado o cambia constantemente. Cuesta CPU en el servidor y añade TTFB.\n- **ISR**: SSG con revalidación. Se sirve la versión estática y se regenera en segundo plano cada N segundos o bajo demanda. Suele ser el mejor equilibrio para un catálogo grande.\n- **Streaming SSR con componentes de servidor**: el servidor manda el HTML por trozos a medida que está listo, sin esperar a la parte más lenta. Mejora el tiempo hasta el primer contenido y permite que cada zona tenga su propio estado de carga.\n\nLo que casi nadie menciona y es lo importante: **la hidratación**. Un SSR mal planteado pinta rápido pero la página **no responde** hasta que se descarga y ejecuta todo el JavaScript, con lo que has mejorado el LCP y empeorado la sensación real. De ahí vienen la hidratación parcial, las islas (Astro) y la resumabilidad (Qwik).\n\nY la decisión real casi nunca es global: en una misma aplicación, el marketing es SSG, el catálogo ISR y el panel CSR.",
+      "rubric": {
+        "junior": "Distingue renderizar en cliente de renderizar en servidor.",
+        "mid": "Conoce las cinco estrategias y elige según SEO, frescura del dato y coste.",
+        "senior": "Señala la hidratación como el coste oculto del SSR, conoce las respuestas del ecosistema (islas, streaming, resumabilidad), y decide por ruta en vez de por aplicación."
+      },
+      "followUps": [
+        "¿Qué problema resuelven las islas?",
+        "¿Por qué el SSR puede empeorar la interactividad?"
+      ]
+    },
+    {
+      "id": "js-q038",
+      "level": "senior",
+      "topic": "Seguridad",
+      "tags": [
+        "seguridad",
+        "auth"
+      ],
+      "prompt": "¿Dónde guardas el token de sesión en una SPA y por qué?",
+      "answer": "Hay dos opciones reales y ninguna es gratis:\n\n**`localStorage`**: fácil, funciona entre dominios, pero **cualquier XSS lo lee**. Basta con una dependencia comprometida o un script de terceros mal puesto para que el atacante se lleve todas las sesiones. Y no hay defensa: si se ejecuta JavaScript ajeno, tiene tu token.\n\n**Cookie `HttpOnly`**: JavaScript **no puede leerla**, así que un XSS no puede robar el token (aunque sí puede hacer peticiones en nombre del usuario mientras la página esté abierta, que es menos grave). A cambio se expone a **CSRF**, porque el navegador la envía sola. Se mitiga con `SameSite=Lax` o `Strict`, y con tokens anti-CSRF cuando haga falta. Más `Secure` y `Path`.\n\n**La recomendación es la cookie `HttpOnly`**, porque acota el peor escenario: exfiltración persistente del token frente a acciones limitadas a la sesión del navegador.\n\nEl patrón completo que se usa en producción:\n- **Access token de vida corta** (5-15 minutos), en memoria o en la cookie.\n- **Refresh token de vida larga** en cookie `HttpOnly`, `Secure`, `SameSite`, con **rotación**: cada uso emite uno nuevo e invalida el anterior. Si aparece uno ya usado, se revoca la familia entera, porque implica robo.\n- Revocación del lado del servidor, porque un JWT por sí solo no se puede invalidar antes de que expire.\n\nY el aviso: **guardar un JWT en `localStorage` \"porque es stateless\"** es la decisión que más incidentes causa en aplicaciones web.",
+      "rubric": {
+        "junior": "Dice localStorage porque es lo que ha visto.",
+        "mid": "Prefiere cookie HttpOnly y conoce el intercambio entre XSS y CSRF.",
+        "senior": "Razona desde el peor escenario de cada opción, describe el patrón de access corto más refresh rotado con detección de reuso, y señala que un JWT puro no permite revocación."
+      },
+      "followUps": [
+        "¿Cómo revocas un JWT antes de que expire?",
+        "¿Qué es la rotación de refresh tokens?"
+      ]
+    },
+    {
+      "id": "js-q039",
+      "level": "senior",
+      "topic": "Arquitectura",
+      "tags": [
+        "estado",
+        "diseño"
+      ],
+      "prompt": "¿Cómo decides la arquitectura de estado de una aplicación grande?",
+      "answer": "El error de partida es tratar todo el estado como si fuera lo mismo. Hay al menos **cuatro clases** y cada una quiere una herramienta distinta:\n\n1. **Estado de servidor**: datos que viven en el backend y tú cacheas. Necesitan invalidación, revalidación, reintentos, deduplicación y estado de carga. Esto es lo que resuelven **TanStack Query**, SWR o RTK Query. Meterlo en Redux a mano es reimplementar una caché peor.\n2. **Estado de UI global**: tema, sesión, panel abierto. Poco volumen, cambia poco. Contexto o un store pequeño (Zustand, Jotai).\n3. **Estado local de componente**: `useState`. La mayoría del estado debería ser esto.\n4. **Estado de URL**: filtros, paginación, pestaña activa. Debe vivir en la **URL**, no en memoria, para que la página sea compartible, recargable y funcione con el botón atrás. Es el que más se olvida y el que más valor da al usuario.\n\nSeparar el 1 del 2 es lo que más simplifica una base de código grande: elimina la mayor parte del \"estado global\" que en realidad era caché de red.\n\nCriterios para lo que quede: ¿cuántos componentes lo necesitan de verdad? ¿con qué frecuencia cambia (un store que cambia por frame re-renderiza medio árbol)? ¿se puede derivar de otra cosa en vez de guardarse?\n\nY el principio que más bugs evita: **hacer irrepresentables los estados imposibles**. `{ loading, error, data }` como campos sueltos permite ocho combinaciones y solo tres son válidas. Una unión discriminada permite tres.",
+      "rubric": {
+        "junior": "Propone un store global para compartir estado.",
+        "mid": "Distingue estado de servidor de estado de cliente y usa una librería de datos para el primero.",
+        "senior": "Clasifica el estado en las cuatro categorías incluida la URL, decide por frecuencia de cambio y alcance, y modela con uniones discriminadas para eliminar estados imposibles."
+      },
+      "followUps": [
+        "¿Qué estado debería vivir en la URL?",
+        "¿Cómo modelas carga, error y datos sin estados imposibles?"
+      ]
+    },
+    {
+      "id": "js-q040",
+      "level": "senior",
+      "topic": "Arquitectura",
+      "tags": [
+        "monorepo",
+        "escala"
+      ],
+      "prompt": "¿Cómo organizas un monorepo de frontend con varios equipos?",
+      "answer": "Herramientas: **pnpm workspaces** (enlaces duros y un almacén global: mucho menos disco y más rápido que npm o yarn), con **Turborepo** o **Nx** encima para el grafo de tareas y el caché.\n\nEstructura por responsabilidad:\n```\napps/          web, admin, docs\npackages/      ui, config, utils, api-client, tsconfig, eslint-config\n```\n\nLo que hace que funcione a escala:\n\n- **Caché de tareas con reintegración**. La ganancia grande no es el caché local: es el **caché remoto compartido**, que hace que CI no reconstruya lo que otro ya construyó. En un monorepo grande es la diferencia entre 20 minutos y 2.\n- **Ejecutar solo lo afectado** por el cambio, derivado del grafo de dependencias.\n- **Los límites los impone la herramienta, no la disciplina.** Las dependencias declaradas en cada `package.json` más reglas de import en el linter (Nx tiene etiquetas de módulo) hacen que una importación prohibida **falle**, en vez de depender de que alguien lo vea en la revisión.\n- **`CODEOWNERS` alineado** con los paquetes.\n- **Versiones unificadas** de las dependencias compartidas (React, TypeScript). Dos versiones de React en el mismo bundle es un problema real.\n\nLos costes que hay que aceptar: el CI se complica, los cambios en un paquete base pueden romper varias apps a la vez, y hace falta una estrategia de publicación (Changesets) si los paquetes salen fuera.\n\nY la advertencia: los límites correctos **se descubren** observando qué cambia junto, no dibujando un diagrama antes de escribir nada.",
+      "rubric": {
+        "junior": "Propone carpetas compartidas para el código común.",
+        "mid": "Usa workspaces con Turborepo o Nx y separa apps de packages.",
+        "senior": "Trata el caché remoto y la ejecución de lo afectado como lo que hace viable el monorepo, impone los límites con herramientas verificables, y advierte contra trazar fronteras prematuras."
+      },
+      "followUps": [
+        "¿Qué aporta el caché remoto frente al local?",
+        "¿Cómo impides que una app importe de otra?"
+      ]
+    },
+    {
+      "id": "js-q041",
+      "level": "senior",
+      "topic": "Calidad",
+      "tags": [
+        "dependencias",
+        "supply chain"
+      ],
+      "prompt": "¿Cómo gestionas el riesgo de las dependencias de npm?",
+      "answer": "El riesgo de fondo: **una dependencia ejecuta código con tus privilegios**, y no solo en producción. Los scripts `postinstall` se ejecutan en tu portátil y en tu CI, donde suele haber credenciales.\n\nVectores reales, todos con incidentes documentados: typosquatting, toma de cuenta de un mantenedor, un mantenedor que sabotea su propio paquete, y **dependencias transitivas** (no auditas 5 paquetes, auditas los 900 que arrastran).\n\nMedidas, de más a menos efectiva:\n\n1. **Reducir el número de dependencias.** Es la única que ataca la raíz. Si son 200 líneas que entiendes, escribirlas suele salir más barato que mantener la dependencia cinco años.\n2. **Lockfile commiteado y builds desde el lockfile** (`npm ci`, `pnpm install --frozen-lockfile`). Reproducible y auditable.\n3. **Desactivar scripts de instalación** por defecto (pnpm permite una lista blanca). Corta el vector más directo.\n4. **Actualizaciones revisadas, no automergeadas.** Dependabot o Renovate creando PRs que **una persona mira**, con un periodo de cuarentena para versiones recién publicadas.\n5. **`npm audit` / Snyk** en CI, con criterio: la mayoría de avisos son en dependencias de desarrollo y no explotables. Tratar todo como bloqueante enseña al equipo a ignorar el informe.\n6. **CI aislado**, sin credenciales de producción durante el build.\n7. **Publicar con OIDC** desde Actions en vez de con tokens de larga vida.\n\nY una asimetría que conviene tener presente al decidir: **añadir una dependencia cuesta cinco minutos; quitarla, semanas.**",
+      "rubric": {
+        "junior": "Mira las descargas y si el paquete está mantenido.",
+        "mid": "Commitea el lockfile, usa npm ci y revisa las actualizaciones automáticas.",
+        "senior": "Incluye el tiempo de build como vector (postinstall en CI con credenciales), propone desactivar scripts y cuarentena de versiones, y gestiona el ruido de las auditorías para no destruir su señal."
+      },
+      "followUps": [
+        "¿Por qué postinstall es peligroso?",
+        "¿Qué haces con un aviso de vulnerabilidad en una devDependency?"
+      ]
+    },
+    {
+      "id": "js-q042",
+      "level": "senior",
+      "topic": "Arquitectura",
+      "tags": [
+        "api",
+        "contratos"
+      ],
+      "prompt": "¿Cómo diseñas la capa de comunicación con el backend?",
+      "answer": "El objetivo: que un cambio en la API rompa en **compilación**, no en producción.\n\nPiezas:\n\n1. **Un contrato, generado y no escrito a mano.** OpenAPI, GraphQL o tRPC según el caso. Los tipos del cliente se **generan** desde el esquema del servidor; escribirlos a mano garantiza que se desincronizarán. Con tRPC en un monorepo TypeScript la inferencia es directa; con OpenAPI, un generador en el build.\n2. **Validación en el borde.** Aunque tengas tipos generados, el servidor puede mentir: una versión desplegada distinta, un proxy, un campo que cambió. Validar con **Zod** al entrar convierte un `undefined` que reventará tres capas más abajo en un error claro en el punto de entrada. Los tipos de TypeScript **no existen en runtime**; esto sí.\n3. **Una capa de cliente**, no `fetch` esparcido. Un sitio para la URL base, la autenticación, los reintentos, los timeouts con `AbortSignal`, el manejo de 401 y la normalización de errores.\n4. **Mapeo a modelos de dominio** cuando la API no encaja con lo que la UI necesita. Evita que la forma del backend se filtre por toda la aplicación y que un renombrado en el servidor obligue a tocar cincuenta componentes.\n5. **Caché y estado de servidor** con una librería dedicada (TanStack Query): deduplicación, revalidación e invalidación resueltas.\n6. **Versionado y compatibilidad**: los clientes móviles y las pestañas abiertas siguen usando la versión vieja. Los cambios deben ser aditivos por defecto.\n\nY en tests, **MSW**: interceptar a nivel de red es más realista que mockear el módulo del cliente, y los mismos handlers sirven para desarrollo sin backend.",
+      "rubric": {
+        "junior": "Centraliza las llamadas fetch en un fichero de servicios.",
+        "mid": "Genera tipos desde el contrato, centraliza auth y errores, y usa una librería de estado de servidor.",
+        "senior": "Valida en runtime porque los tipos no existen en ejecución, aísla el dominio del backend con mapeo, contempla versionado para clientes desplegados, y usa MSW para tests y desarrollo."
+      },
+      "followUps": [
+        "¿Por qué validar si ya tienes tipos generados?",
+        "¿Cómo manejas clientes viejos tras un cambio de API?"
+      ]
+    },
+    {
+      "id": "js-q043",
+      "level": "senior",
+      "topic": "Arquitectura",
+      "tags": [
+        "micro frontends"
+      ],
+      "prompt": "¿Cuándo tienen sentido los micro frontends?",
+      "answer": "La respuesta que hay que dar primero: **casi nunca, y es una decisión organizativa más que técnica**.\n\nEl problema que resuelven es real pero concreto: **varios equipos que necesitan desplegar de forma independiente** sobre una misma aplicación, normalmente con stacks distintos por razones históricas. Es la ley de Conway aplicada a propósito.\n\nLo que cuestan, y por eso el listón debe estar alto:\n- **Duplicación del runtime**: dos versiones de React en la misma página no es solo peso, puede romper hooks y contexto.\n- **Consistencia visual**: sin un design system compartido y disciplinado, la aplicación parece cosida a trozos.\n- **Estado y comunicación entre fragmentos**: acaba siendo un bus de eventos poco tipado, que es exactamente lo que se intentaba evitar.\n- **Depuración y observabilidad**: una traza que cruza tres fragmentos desplegados por tres equipos.\n- **Rendimiento**: más bundles, más peticiones, tree shaking peor.\n\nImplementaciones: Module Federation (webpack/Rspack), import maps con ESM nativo, o composición en el borde (edge-side includes). También los frameworks que ya lo contemplan (Astro con islas, Next con rutas por equipo).\n\nLa pregunta de control: **¿el despliegue independiente es un problema real hoy, medido, o una preocupación hipotética?** En la mayoría de los casos un monorepo bien modularizado con CODEOWNERS y despliegue por rutas da el 90% del beneficio con el 10% del coste.",
+      "rubric": {
+        "junior": "Sabe que son partes de la aplicación desarrolladas por separado.",
+        "mid": "Conoce Module Federation y los problemas de consistencia y duplicación.",
+        "senior": "Los encuadra como solución organizativa, enumera los costes con precisión, y propone primero el monorepo modularizado porque casi siempre resuelve el problema real."
+      },
+      "followUps": [
+        "¿Qué problema da tener dos versiones de React en la página?",
+        "¿Qué alternativa propondrías primero?"
+      ]
+    },
+    {
+      "id": "js-q044",
+      "level": "senior",
+      "topic": "Calidad",
+      "tags": [
+        "legado",
+        "refactor"
+      ],
+      "prompt": "Heredas una aplicación jQuery de 200.000 líneas sin tests. ¿Qué haces?",
+      "answer": "Lo primero es **no reescribirla**. Una reescritura completa de un sistema en producción es el proyecto con peor historial del oficio: tarda el doble, durante ese tiempo no se entrega valor, y se reintroducen bugs que el sistema viejo ya había resuelto (todos esos `if` raros suelen ser casos reales que alguien encontró a base de incidencias).\n\nPlan:\n\n1. **Ver antes de tocar.** Crash reporting, logs, métricas de las rutas que generan dinero. Sin observabilidad, cualquier cambio es a ciegas y no sabrás si empeoraste algo.\n2. **Red de seguridad en el perímetro.** No tests unitarios del código que va a cambiar, sino unos pocos **end-to-end de los flujos críticos**. Es lo que te da permiso para mover cosas.\n3. **Estrangular por los bordes** (*strangler fig*). La funcionalidad nueva se escribe con el stack nuevo; lo viejo se sustituye cuando hay que tocarlo. Se puede montar página a página, o incluso componente a componente montando el framework nuevo dentro de un contenedor del DOM que gestiona el código viejo.\n4. **Empezar por lo que más se toca**, no por lo que más molesta estéticamente. Mira el historial de git: los ficheros que más cambian son los que más rentabilizan la mejora.\n5. **Regla del campamento**: cada vez que toques un fichero por una tarea real, déjalo algo mejor. Una campaña de refactor de tres meses sin entregar es insostenible y se cancela a mitad, dejando **dos** arquitecturas conviviendo, que es peor que el punto de partida.\n6. **Automatizar lo automatizable**: linters incrementales (solo para código nuevo o por carpeta), formato en CI, y prohibir que la deuda crezca.\n\nY desde el primer día: **medir y comunicar con números**. Incidencias, tiempo de entrega, errores en producción. Sin eso, \"estamos mejorando la calidad\" suena a excusa para no entregar, y el permiso se acaba.",
+      "rubric": {
+        "junior": "Propone reescribir con un framework moderno.",
+        "mid": "Añade tests antes de tocar y migra gradualmente.",
+        "senior": "Descarta la reescritura con argumentos, empieza por observabilidad, aplica strangler fig, elige el orden por el historial de cambios, y trata la comunicación con datos como parte del trabajo técnico."
+      },
+      "followUps": [
+        "¿Por qué fracasan las reescrituras completas?",
+        "¿Cómo eliges qué migrar primero?"
+      ]
+    },
+    {
+      "id": "js-q045",
+      "level": "senior",
+      "topic": "Navegador",
+      "tags": [
+        "accesibilidad"
+      ],
+      "prompt": "¿Qué implica hacer accesible una aplicación web de verdad?",
+      "answer": "Lo esencial, por orden de impacto:\n\n1. **HTML semántico.** Un `<button>` real trae foco, activación con Enter y Espacio, rol y estados sin escribir nada. Un `<div onClick>` no es accesible y hace falta reimplementar todo eso a mano, casi siempre mal. **La mejor ARIA es la que no escribes.**\n2. **Teclado.** Todo lo que se puede hacer con ratón debe poder hacerse con teclado, con un **indicador de foco visible** (quitar el outline sin poner alternativa es de los errores más extendidos). Y el orden de tabulación debe seguir el orden visual.\n3. **Gestión del foco en aplicaciones dinámicas.** Es la parte específica de las SPA y la que más se olvida: al abrir un modal hay que mover el foco dentro y **atraparlo**; al cerrarlo, devolverlo al disparador; al navegar entre rutas, anunciar el cambio, porque no hay recarga de página que lo haga por ti.\n4. **Contraste y tamaño**: 4.5:1 para texto normal, objetivos táctiles de 44 px, y que la página funcione con zoom al 200%.\n5. **Nombres accesibles**: un icono sin etiqueta es un botón mudo. Formularios con `<label>` asociado.\n6. **Regiones dinámicas**: `aria-live` para que un lector anuncie que apareció un error o terminó una carga.\n7. **`prefers-reduced-motion`**: hay gente a la que las animaciones le provocan mareo.\n\nProceso: **axe** o Lighthouse en CI atrapa quizá el 30%. El resto requiere probar con teclado y con un lector de pantalla real (VoiceOver, NVDA). Y lo que más cambia el resultado es tratarlo como requisito **de diseño**, no como repaso final: un mockup con contraste insuficiente ya trae el problema dentro.",
+      "rubric": {
+        "junior": "Menciona alt en las imágenes y contraste.",
+        "mid": "Usa HTML semántico, navegación por teclado y comprueba con herramientas automáticas.",
+        "senior": "Trata la gestión del foco en SPA como el punto crítico, sabe que lo automático cubre una fracción, y sitúa la accesibilidad en la fase de diseño y no en la de QA."
+      },
+      "followUps": [
+        "¿Qué hay que hacer con el foco al abrir un modal?",
+        "¿Cómo anuncias un cambio de ruta a un lector de pantalla?"
+      ]
+    },
+    {
+      "id": "js-q046",
+      "level": "senior",
+      "topic": "Runtime",
+      "tags": [
+        "node",
+        "backend"
+      ],
+      "prompt": "¿Qué hay que vigilar en un servidor Node en producción?",
+      "answer": "La regla de oro: **un hilo atiende todas las peticiones**. Cualquier cosa que bloquee el event loop las bloquea **todas**, no solo la del usuario que la provocó.\n\nQué vigilar:\n\n1. **Trabajo síncrono pesado**: JSON gigantes, criptografía, `readFileSync`, bucles largos, expresiones regulares con backtracking catastrófico (**ReDoS**: una regex mal escrita con la entrada adecuada cuelga el servidor entero). Solución: `worker_threads`, trocear, o sacarlo a un servicio aparte.\n2. **Lag del event loop** como métrica de primer nivel. Es el indicador más honesto de salud de un proceso Node, más que la CPU.\n3. **Rechazos no manejados**: en Node moderno terminan el proceso. Hay que capturarlos y decidir explícitamente.\n4. **Fugas de memoria**: closures retenidos, listeners sin quitar, cachés sin límite. El heap tiene un tope y al alcanzarlo el proceso muere.\n5. **Escalado**: un proceso usa un núcleo. `cluster`, PM2 o varias réplicas en el orquestador para aprovechar la máquina.\n6. **Apagado limpio**: atender `SIGTERM`, dejar de aceptar conexiones, terminar las peticiones en vuelo, cerrar las conexiones a base de datos. Sin esto, cada despliegue corta peticiones de usuarios reales.\n7. **Streams para datos grandes**: subir o descargar ficheros cargándolos en memoria no escala con la concurrencia.\n8. **Backpressure** en los streams: si el consumidor es más lento que el productor y no la respetas, la memoria crece hasta reventar.\n\nY observabilidad: trazas distribuidas (OpenTelemetry), logs estructurados con identificador de correlación, y métricas de latencia por **percentiles**. La media miente: lo que importa es el p95 y el p99.",
+      "rubric": {
+        "junior": "Sabe que Node es de un hilo y que hay que capturar errores.",
+        "mid": "Vigila memoria y CPU, usa cluster y evita trabajo síncrono pesado.",
+        "senior": "Trata el lag del event loop como métrica principal, conoce ReDoS y la contrapresión de streams, implementa apagado limpio para despliegues sin corte, y razona por percentiles."
+      },
+      "followUps": [
+        "¿Qué es el lag del event loop y cómo lo mides?",
+        "¿Por qué importa el apagado limpio en Kubernetes?"
+      ]
+    },
+    {
+      "id": "js-q047",
+      "level": "senior",
+      "topic": "Calidad",
+      "tags": [
+        "revision",
+        "equipo"
+      ],
+      "prompt": "¿Qué buscas al revisar un pull request?",
+      "answer": "Por orden de importancia, no de facilidad de detección:\n\n1. **¿Resuelve el problema correcto?** El error más caro es código impecable que resuelve lo que no era. Esto hay que verlo en los primeros dos minutos, antes de entrar en el diff.\n2. **Casos borde**: qué pasa con la lista vacía, sin red, con doble clic, con una respuesta lenta, con datos que llegan en otro orden. Estados de carga, error y vacío.\n3. **Seguridad**: entrada de usuario insertada en el DOM, datos sensibles en logs o en el cliente, permisos comprobados solo en la UI.\n4. **Fugas y limpieza**: listeners, intervalos, suscripciones, peticiones no abortadas al desmontar.\n5. **Modelo de datos**: ¿los estados imposibles son representables? Es donde un cambio pequeño de diseño evita diez bugs futuros.\n6. **Tests**: ¿prueban comportamiento o implementación? Un test que se rompe al renombrar una función privada es un pasivo. Y la pregunta útil: *¿qué bug real habría atrapado este test?*\n7. **Rendimiento**, solo si hay motivo concreto.\n8. **Estilo**: lo mínimo. Eso lo arregla el linter, no una persona.\n\nSobre la forma, que importa tanto como el contenido:\n- **Distinguir lo que bloquea de la sugerencia.** Un comentario sin esa distinción hace perder tiempo a todo el mundo.\n- **Preguntar antes que afirmar.** \"¿Qué pasa aquí si la petición falla?\" enseña más que \"esto está mal\", y a veces descubres que había una razón que no viste.\n- **PR grande**: el mejor comentario suele ser pedir que se parta. Nadie revisa bien 2.000 líneas, y aprobarlas sin revisarlas es peor que no revisar.",
+      "rubric": {
+        "junior": "Busca errores evidentes y consistencia de estilo.",
+        "mid": "Revisa casos borde, limpieza de recursos y calidad de los tests.",
+        "senior": "Prioriza que se resuelva el problema correcto y el modelado sobre el estilo, evalúa los tests por su valor y no por su existencia, y cuida la forma de comunicar porque la revisión también es herramienta de equipo."
+      },
+      "followUps": [
+        "¿Qué haces con un PR de 2.000 líneas?",
+        "¿Cómo distingues un buen test de uno frágil?"
+      ]
+    },
+    {
+      "id": "js-q048",
+      "level": "senior",
+      "topic": "Arquitectura",
+      "tags": [
+        "decisiones"
+      ],
+      "prompt": "El equipo quiere migrar de un framework a otro. ¿Cómo lo evalúas?",
+      "answer": "Primero, la pregunta que casi nadie hace: **¿qué problema concreto y medido resuelve la migración?** Si la respuesta es \"el nuevo es mejor\" o \"el actual está pasado de moda\", no hay caso. Si es \"tardamos tres semanas en cada funcionalidad nueva por X\" o \"no podemos contratar\", ya se puede razonar.\n\nEvaluación:\n\n1. **Cuantificar el coste actual.** ¿Cuánto tiempo se pierde y en qué exactamente? Sin una línea base no podrás demostrar mejora ni saber cuándo parar.\n2. **Cuantificar la migración.** No solo el código: formación, bajada de productividad durante meses, bugs reintroducidos, herramientas, CI. Y multiplica por dos, porque siempre se subestima.\n3. **Coste de oportunidad.** ¿Qué **no** se va a construir durante ese tiempo? Este es el argumento que entiende negocio y el que casi nunca se pone sobre la mesa.\n4. **¿Es incremental?** Si se puede hacer conviviendo, el riesgo baja muchísimo. Si exige un *big bang*, el listón sube mucho.\n5. **Prototipo real**, no una demo. Migra una pantalla representativa de verdad y mide cuánto costó. Eso convierte la discusión de opiniones en datos.\n6. **¿Cuánto dura la decisión?** Si el framework nuevo lleva un año existiendo, estás asumiendo un riesgo distinto que con uno con diez años y gobernanza clara.\n\nY conviene nombrar el factor humano: a menudo la motivación real es **aburrimiento o miedo a quedarse obsoleto**, y son razones legítimas para la retención del equipo, pero hay que decirlas en voz alta y ponerlas en la balanza, no disfrazarlas de argumentos técnicos.\n\nEl resultado suele ser una tercera opción: **arreglar los tres problemas concretos** del stack actual por una fracción del coste.",
+      "rubric": {
+        "junior": "Compara características de los dos frameworks.",
+        "mid": "Evalúa coste de migración, curva del equipo y madurez, y propone un prototipo.",
+        "senior": "Exige un problema medido, cuantifica el coste de oportunidad, prioriza la migración incremental, nombra el factor humano honestamente, y contempla arreglar el stack actual como alternativa."
+      },
+      "followUps": [
+        "¿Cómo presentarías esto a negocio?",
+        "¿Qué harías si la motivación real es la retención del equipo?"
+      ]
+    },
+    {
+      "id": "js-q049",
+      "level": "senior",
+      "topic": "Calidad",
+      "tags": [
+        "estandares",
+        "equipo"
+      ],
+      "prompt": "¿Cómo estableces estándares de código sin ser un cuello de botella?",
+      "answer": "El principio: **si el estándar depende de que tú lo recuerdes en cada revisión, no es un estándar, es una preferencia tuya**, y se pierde en cuanto te vas de vacaciones.\n\nJerarquía de eficacia, de mejor a peor:\n\n1. **Imposible de incumplir.** Lo mejor es que el mal camino no exista. Si el paquete de dominio no tiene React entre sus dependencias, nadie puede importar un componente ahí: no hay nada que recordar.\n2. **Automático.** ESLint, Prettier, TypeScript en modo estricto, comprobaciones en CI. Una regla discute mejor que una persona: es consistente, inmediata y no genera roce personal. Y se pueden escribir reglas propias del proyecto.\n3. **Plantillas y ejemplos.** La gente copia lo que ve. Un módulo de referencia bien hecho enseña más que un documento de veinte páginas, porque es lo que se abre al escribir uno nuevo.\n4. **Documentado.** Un ADR corto y localizable. Si no está escrito, no existe: es folclore que se transmite por casualidad.\n5. **Revisión humana.** El último recurso, para lo que **no** se puede automatizar: diseño, nombres, si el problema resuelto es el correcto.\n\nSobre el proceso:\n- **Se acuerdan, no se imponen.** Una regla que el equipo no comparte se esquiva con `// eslint-disable` y genera resentimiento. Discutirla cuesta una reunión; imponerla cuesta meses de fricción.\n- **Activar reglas de forma incremental**, por carpeta o solo para código nuevo. Encender cincuenta reglas de golpe en una base antigua produce 3.000 avisos y el equipo aprende a ignorarlos, que es el peor resultado posible.\n- **Rotar quién revisa**, y que los junior revisen a los senior: distribuye el conocimiento y evita que el estándar viva en una sola cabeza.\n\nLa medida del éxito no es que el código cumpla el estándar, sino que **el equipo lo mantenga sin ti**.",
+      "rubric": {
+        "junior": "Propone una guía de estilo y revisar el código.",
+        "mid": "Automatiza con linters y CI y documenta las convenciones.",
+        "senior": "Ordena las herramientas empezando por hacer imposible el error, acuerda en vez de imponer, introduce reglas incrementalmente para no destruir la señal, y define el éxito como que el sistema funcione sin él."
+      },
+      "followUps": [
+        "¿Cómo activas reglas estrictas en un proyecto antiguo?",
+        "¿Qué haces si el equipo no comparte una regla?"
+      ]
+    },
+    {
+      "id": "js-q050",
+      "level": "senior",
+      "topic": "Calidad",
+      "tags": [
+        "incidentes",
+        "operacion"
+      ],
+      "prompt": "Hay un incidente en producción a las 2 de la madrugada. ¿Cómo lo gestionas?",
+      "answer": "El orden importa, y es contraintuitivo para quien viene solo de programar:\n\n1. **Mitigar antes que entender.** El instinto del ingeniero es diagnosticar; la prioridad es que los usuarios dejen de sufrirlo. Si hay un rollback disponible, se hace **primero** y se investiga después con calma. Un feature flag que apaga la funcionalidad rota vale más que cualquier arreglo rápido a las 2 de la mañana, porque el código escrito con prisa y sueño es como empeoran los incidentes.\n2. **Comunicar desde el primer minuto.** Quién está en ello, qué se sabe, cuándo será la próxima actualización. El silencio multiplica la percepción de gravedad y hace que cinco personas pregunten a la vez, interrumpiendo a quien está resolviendo.\n3. **Roles claros** si es grave: alguien coordina y comunica, alguien investiga. La misma persona haciendo las dos cosas hace mal las dos.\n4. **Diagnosticar con datos**: ¿qué cambió? Despliegues recientes, feature flags, cambios de configuración, dependencias externas, picos de tráfico. La mayoría de los incidentes tienen como causa un cambio reciente.\n5. **Post-mortem sin culpables**, siempre. Línea de tiempo, causa raíz, y sobre todo: **¿por qué no lo detectamos antes?** La mejor acción que sale de un post-mortem suele ser una alerta que faltaba, no un parche.\n6. **Acciones con dueño y fecha.** Un post-mortem sin eso es terapia de grupo.\n\nY lo que hay que preparar **antes** de que pase: runbooks, alertas que signifiquen algo (una alerta que salta todos los días ya no es una alerta), rollback de un clic, y feature flags. La calidad de la gestión de un incidente se decide semanas antes, no esa noche.\n\nY una parte que se ignora: **descansar después**. Alguien que ha estado despierto toda la noche no debe desplegar al día siguiente.",
+      "rubric": {
+        "junior": "Busca el error en los logs e intenta arreglarlo.",
+        "mid": "Mitiga primero, comunica el estado y hace un post-mortem.",
+        "senior": "Separa mitigación de diagnóstico y justifica el orden, organiza roles, orienta el post-mortem a la detección y no solo a la causa, y sitúa la preparación previa (alertas, rollback, flags) como lo que determina el resultado."
+      },
+      "followUps": [
+        "¿Por qué mitigar antes de entender la causa?",
+        "¿Qué hace útil a un post-mortem?"
+      ]
+    }
+  ],
+  "exercises": [
+    {
+      "id": "js-e001",
+      "title": "Implementar debounce desde cero",
+      "difficulty": "easy",
+      "topic": "Funciones",
+      "statement": "Escribe `debounce(fn, ms)`. Requisitos: conservar el `this` y los argumentos de la llamada, exponer un método `cancel()`, y una opción `leading` que ejecute también en el primer evento.\n\nEs la pregunta de pizarra más frecuente en entrevistas de frontend, y casi nadie la resuelve completa.",
+      "hints": [
+        "Un closure puede guardar el id del temporizador entre llamadas.",
+        "Una arrow function hereda this y no te deja recibir el del llamador.",
+        "Para leading necesitas saber si el temporizador estaba inactivo."
+      ],
+      "approach": "El núcleo es un closure que guarda el id del temporizador: cada llamada cancela el anterior y programa uno nuevo. Lo que separa una respuesta de aprobado de una buena son los tres detalles:\n\n**1. `this` y argumentos.** Si devuelves una arrow function, hereda el `this` léxico y no podrás usarla como método. La función devuelta debe ser `function` normal y hacer `fn.apply(this, args)`. Es sutil y es justo lo que el entrevistador mira.\n\n**2. `cancel()`.** Sin él no hay forma de limpiar al desmontar un componente, y el callback se dispara sobre algo que ya no existe. Toda función con temporizador necesita una vía de cancelación.\n\n**3. `leading`.** Por defecto el debounce es *trailing*: actúa al final. En algunos casos (un botón que no debe dispararse dos veces) quieres que actúe **al principio** e ignore el resto.\n\nY conviene saber la diferencia con throttle: debounce espera a que **pare** la actividad; throttle ejecuta como mucho una vez cada N ms. Para un buscador, debounce; para un scroll, throttle.",
+      "solutionSketch": "```js\nfunction debounce(fn, ms, { leading = false } = {}) {\n  let timer = null;\n\n  // function, no arrow: necesitamos el this del llamador.\n  function debounced(...args) {\n    const llamarAhora = leading && timer === null;\n\n    clearTimeout(timer);\n    timer = setTimeout(() => {\n      timer = null;\n      if (!leading) fn.apply(this, args);\n    }, ms);\n\n    if (llamarAhora) fn.apply(this, args);\n  }\n\n  debounced.cancel = () => {\n    clearTimeout(timer);\n    timer = null;\n  };\n\n  return debounced;\n}\n\n// Uso\nconst buscar = debounce(function (q) { api.search(q); }, 300);\ninput.addEventListener('input', (e) => buscar(e.target.value));\n// Al desmontar: buscar.cancel();\n```",
+      "complexity": "O(1) por llamada. Reduce N eventos a aproximadamente uno por pausa de actividad.",
+      "pitfalls": [
+        "Devolver una arrow function: pierdes el this del llamador y no sirve como método.",
+        "Olvidar cancel(): el callback se dispara sobre un componente ya desmontado.",
+        "No pasar los argumentos: el callback recibe undefined.",
+        "Confundirlo con throttle y usarlo en un scroll, donde no pasa nada hasta que el usuario se detiene."
+      ]
+    },
+    {
+      "id": "js-e002",
+      "title": "Aplanar y agrupar datos anidados",
+      "difficulty": "easy",
+      "topic": "Colecciones",
+      "statement": "Dada una lista de pedidos, cada uno con un array de líneas, calcula el total facturado por categoría de producto. Hazlo en una sola pasada y sin mutar la entrada.\n\n```js\nconst pedidos = [\n  { id: 1, lineas: [{ categoria: 'libros', importe: 20 }, { categoria: 'musica', importe: 10 }] },\n  { id: 2, lineas: [{ categoria: 'libros', importe: 15 }] },\n];\n// → { libros: 35, musica: 10 }\n```",
+      "hints": [
+        "flatMap aplana un nivel mientras transforma.",
+        "El operador ?? evita comprobar si la clave existe.",
+        "¿Qué pasa si una categoría se llama 'constructor' o '__proto__'?"
+      ],
+      "approach": "Dos pasos naturales: aplanar y agrupar.\n\n`flatMap` aplana **un** nivel mientras transforma, así que `pedidos.flatMap(p => p.lineas)` da todas las líneas. Para más niveles, `flat(Infinity)`.\n\nPara agrupar, `reduce` es lo idiomático, aunque un `for...of` con un acumulador se lee igual de bien y es más fácil de depurar. `reduce` se usa a menudo donde un bucle sería más honesto.\n\nEl detalle que distingue una respuesta con criterio: **usar un objeto literal como diccionario es arriesgado**. Si una categoría se llamara `__proto__` o `constructor`, un objeto normal se comporta de forma inesperada (es el vector de *prototype pollution*). Las opciones seguras son `Object.create(null)`, que no hereda nada, o un `Map`.\n\nY si tu runtime lo soporta, `Object.groupBy` (y `Map.groupBy`) hacen exactamente esto de forma nativa y expresiva.\n\nSobre el dinero: acumular euros en `Number` arrastra error de coma flotante. Para facturación de verdad, céntimos en enteros.",
+      "solutionSketch": "```js\n// Idiomático y seguro frente a claves como '__proto__'.\nconst totales = pedidos\n  .flatMap((p) => p.lineas)\n  .reduce((acc, { categoria, importe }) => {\n    acc[categoria] = (acc[categoria] ?? 0) + importe;\n    return acc;\n  }, Object.create(null));\n\n// Con Map, si las claves pueden ser cualquier cosa:\nconst porCategoria = new Map();\nfor (const { categoria, importe } of pedidos.flatMap((p) => p.lineas)) {\n  porCategoria.set(categoria, (porCategoria.get(categoria) ?? 0) + importe);\n}\n\n// Nativo, cuando está disponible:\nconst grupos = Object.groupBy(\n  pedidos.flatMap((p) => p.lineas),\n  (l) => l.categoria,\n);\n```",
+      "complexity": "O(n) sobre el total de líneas, O(k) de memoria con k categorías distintas.",
+      "pitfalls": [
+        "Recorrer los pedidos una vez por cada categoría: O(n·k) innecesario.",
+        "Usar un objeto literal como diccionario con claves de origen externo (prototype pollution).",
+        "Olvidar el valor inicial de reduce: con un array vacío lanza TypeError.",
+        "Acumular importes monetarios en coma flotante."
+      ]
+    },
+    {
+      "id": "js-e003",
+      "title": "Buscador con debounce, cancelación y carreras",
+      "difficulty": "medium",
+      "topic": "Asincronía",
+      "statement": "Un buscador que consulta una API. Requisitos: no lanzar una petición por tecla; abortar la petición anterior al escribir de nuevo; y garantizar que una respuesta antigua **nunca** pise a una más reciente. Además, distinguir un aborto de un error real.",
+      "hints": [
+        "El debounce reduce peticiones, pero no elimina las carreras.",
+        "AbortController cancela el fetch; comprueba error.name.",
+        "Aunque abortes, ¿qué garantiza que la respuesta vieja no llegue después?"
+      ],
+      "approach": "Aquí hay **tres** problemas distintos que suelen confundirse en uno.\n\n**1. Volumen.** Escribir \"javascript\" son diez peticiones. Se resuelve con **debounce**.\n\n**2. Trabajo inútil.** Aunque hagas debounce, si el usuario escribe con pausas quedan peticiones en vuelo que ya no interesan. **`AbortController`** las cancela y libera conexión y ancho de banda.\n\n**3. La condición de carrera**, que es el problema real y el que casi nadie resuelve. Aun abortando, la respuesta de \"java\" puede llegar después de la de \"javascript\" si la primera ya estaba resolviéndose. El resultado es un bug intermitente, dependiente de la red: el usuario ve resultados que no corresponden a lo que escribió. Es carísimo de reproducir.\n\nLa defensa es un **token de generación**: cada búsqueda lleva un número incremental y, al llegar la respuesta, se descarta si ya no es la vigente. El abort ayuda, pero el token es la garantía.\n\nY el cuarto detalle: **un `AbortError` no es un fallo**. Si lo tratas como error, el usuario ve un mensaje rojo cada vez que escribe rápido.",
+      "solutionSketch": "```js\nfunction crearBuscador(onResultado, onError, onEstado) {\n  let timer = null;\n  let controller = null;\n  let generacion = 0;\n\n  function buscar(q) {\n    clearTimeout(timer);\n    controller?.abort();          // cancela la anterior\n\n    if (q.trim() === '') { onResultado([]); return; }\n\n    timer = setTimeout(async () => {\n      const miGeneracion = ++generacion;\n      controller = new AbortController();\n      onEstado('cargando');\n\n      try {\n        const r = await fetch(`/api/buscar?q=${encodeURIComponent(q)}`, {\n          signal: controller.signal,\n        });\n        if (!r.ok) throw new Error(`HTTP ${r.status}`);\n        const datos = await r.json();\n\n        // La garantía: llegó tarde, ya hay una búsqueda más reciente.\n        if (miGeneracion !== generacion) return;\n        onResultado(datos);\n        onEstado(datos.length ? 'ok' : 'vacio');\n      } catch (e) {\n        if (e.name === 'AbortError') return;   // esperado, no es un fallo\n        if (miGeneracion !== generacion) return;\n        onError(e);\n        onEstado('error');\n      }\n    }, 300);\n  }\n\n  buscar.destruir = () => { clearTimeout(timer); controller?.abort(); };\n  return buscar;\n}\n```",
+      "complexity": "O(1) por pulsación. Reduce N peticiones a aproximadamente una por pausa de escritura.",
+      "pitfalls": [
+        "Resolver solo el debounce: la carrera sigue ahí y aparece en redes lentas.",
+        "Tratar AbortError como un fallo y mostrar un error al usuario.",
+        "Comparar con el texto actual del input en vez de usar un token: falla si el usuario reescribe lo mismo.",
+        "No limpiar temporizador y controller al desmontar."
+      ]
+    },
+    {
+      "id": "js-e004",
+      "title": "Caché de promesas sin peticiones duplicadas",
+      "difficulty": "medium",
+      "topic": "Asincronía",
+      "statement": "Implementa `memoizeAsync(fn)`. Si se llama 10 veces con la misma clave **antes** de que la primera termine, debe hacerse **una sola** petición. Si falla, la clave no puede quedar envenenada. Añade TTL y un límite de tamaño.",
+      "hints": [
+        "Cachea la promesa, no el valor resuelto.",
+        "¿En qué momento exacto insertas en la caché?",
+        "Si guardas una promesa rechazada, ¿qué recibe quien pregunte mañana?"
+      ],
+      "approach": "La clave del ejercicio es **qué se cachea**. La solución ingenua guarda el valor:\n\n```js\nif (cache.has(k)) return cache.get(k);\nconst v = await fn(k);      // 10 llamadas concurrentes entran todas aquí\ncache.set(k, v);\n```\n\nCon 10 llamadas simultáneas, las diez llegan al `await` antes de que ninguna haya escrito: diez peticiones. Es el **cache stampede**, y aparece justo cuando más duele, al arrancar la aplicación, cuando todo se pide a la vez.\n\nLa solución es cachear la **promesa** e insertarla **de forma síncrona**, antes de cualquier `await`. Las nueve llamadas siguientes la encuentran y se suscriben a la misma.\n\nEl segundo requisito es el que se olvida: **una promesa rechazada cacheada envenena la clave para siempre**. Todos los que pregunten después recibirán el error de hace tres horas aunque la red ya funcione. Hay que retirarla al fallar, enganchando el `catch` **antes** de guardarla.\n\nY dos cosas que convierten esto en algo usable en producción: **TTL**, porque un dato cacheado indefinidamente acaba siendo incorrecto, y **límite de tamaño con desalojo**, porque una caché sin techo es una fuga de memoria con otro nombre.",
+      "solutionSketch": "```js\nfunction memoizeAsync(fn, { ttl = 60_000, max = 100 } = {}) {\n  const cache = new Map();   // clave -> { promise, expira }\n\n  function get(key) {\n    const hit = cache.get(key);\n    if (hit && hit.expira > Date.now()) {\n      // Reinserción: el más reciente queda al final (LRU simple).\n      cache.delete(key);\n      cache.set(key, hit);\n      return hit.promise;\n    }\n\n    // SÍNCRONO, antes de cualquier await: es lo que evita el stampede.\n    const promise = fn(key);\n    cache.set(key, { promise, expira: Date.now() + ttl });\n\n    // Si falla, se retira para no envenenar la clave.\n    promise.catch(() => {\n      if (cache.get(key)?.promise === promise) cache.delete(key);\n    });\n\n    // Desalojo del más antiguo: Map conserva el orden de inserción.\n    if (cache.size > max) cache.delete(cache.keys().next().value);\n\n    return promise;\n  }\n\n  get.invalidate = (key) => cache.delete(key);\n  get.clear = () => cache.clear();\n  return get;\n}\n```",
+      "complexity": "O(1) por consulta. Reduce N peticiones concurrentes por clave a una sola.",
+      "pitfalls": [
+        "Cachear el valor en vez de la promesa: no evita las peticiones concurrentes.",
+        "Insertar después de un await: se pierde justo la ventana donde ocurre el problema.",
+        "Dejar la promesa rechazada en la caché: la clave queda rota indefinidamente.",
+        "Sin límite de tamaño: crece sin techo y acaba siendo una fuga.",
+        "Comparar solo la clave al retirar: si hubo una recarga entre medias, borras la entrada nueva."
+      ]
+    },
+    {
+      "id": "js-e005",
+      "title": "Encontrar y arreglar una fuga de memoria",
+      "difficulty": "medium",
+      "topic": "Runtime",
+      "statement": "Este módulo hace crecer la memoria cada vez que el usuario abre y cierra el panel. Encuentra los cuatro problemas.\n\n```js\nconst cache = {};\n\nexport function abrirPanel(datos) {\n  const nodo = document.createElement('div');\n  cache[datos.id] = { datos, nodo };\n\n  window.addEventListener('resize', () => recolocar(nodo));\n  const t = setInterval(() => refrescar(datos), 1000);\n\n  document.body.append(nodo);\n  return () => { nodo.remove(); };   // cerrar\n}\n```",
+      "hints": [
+        "¿Qué se registra al abrir y quién lo da de baja al cerrar?",
+        "El objeto cache, ¿alguna vez pierde entradas?",
+        "Quitar un nodo del DOM, ¿lo libera si algo lo referencia?"
+      ],
+      "approach": "Los cuatro problemas son variantes del mismo descuido: **crear cosas con ciclo de vida y no cerrarlas**.\n\n1. **El listener de `resize` nunca se da de baja.** Cada apertura añade otro. Y como es una función anónima, no hay referencia para quitarlo. Peor: el closure captura `nodo`, así que mantiene vivo el elemento del DOM aunque se haya quitado del documento. Esto es un **nodo desprendido**, y arrastra todo su subárbol.\n\n2. **El `setInterval` sigue vivo para siempre.** Se ejecuta cada segundo sobre un panel cerrado, haciendo trabajo inútil y reteniendo `datos` por el closure.\n\n3. **`cache` solo crece.** Nunca se borra ninguna entrada, y retiene tanto los datos como el nodo.\n\n4. **`nodo.remove()` no libera nada** mientras algo lo referencie. El listener y la caché lo mantienen vivo.\n\nLa corrección tiene dos partes. La mecánica: devolver una función de limpieza **completa**. Y la estructural: usar **`AbortController`**, que permite dar de baja todos los listeners asociados a una `signal` con una sola llamada, lo que hace muy difícil olvidarse de uno.\n\nPara la caché, `WeakMap` sería lo correcto si la clave fuera un objeto: no impide la recolección. Con claves string no aplica, así que hay que borrar explícitamente o poner un límite.\n\nDiagnóstico: snapshots comparados en DevTools → Memory, y sobre todo el panel de **retainers**, que responde a la pregunta útil (\"¿quién lo está reteniendo?\") en vez de la obvia.",
+      "solutionSketch": "```js\nconst cache = new Map();\n\nexport function abrirPanel(datos) {\n  const nodo = document.createElement('div');\n  const controller = new AbortController();\n\n  cache.set(datos.id, { datos, nodo });\n\n  // La signal da de baja TODOS los listeners de una vez.\n  window.addEventListener('resize', () => recolocar(nodo), {\n    signal: controller.signal,\n  });\n\n  const t = setInterval(() => refrescar(datos), 1000);\n  document.body.append(nodo);\n\n  return function cerrar() {\n    controller.abort();     // todos los listeners, de golpe\n    clearInterval(t);       // el temporizador\n    cache.delete(datos.id); // la entrada de la caché\n    nodo.remove();          // y ahora sí es recolectable\n  };\n}\n```",
+      "complexity": "Sin corregir, la memoria crece linealmente con el número de aperturas y no se libera nunca.",
+      "pitfalls": [
+        "Quitar el listener pero olvidar el intervalo: la fuga sigue, más difícil de ver.",
+        "Intentar removeEventListener con una función anónima: nunca coincide la referencia.",
+        "Creer que remove() del DOM libera memoria por sí solo.",
+        "Usar un objeto global como caché sin política de expiración ni tamaño."
+      ]
+    },
+    {
+      "id": "js-e006",
+      "title": "Peticiones con concurrencia limitada",
+      "difficulty": "medium",
+      "topic": "Asincronía",
+      "statement": "Tienes 1.000 URLs. `Promise.all` las lanza todas a la vez y el servidor te corta. Implementa un ejecutor que mantenga exactamente N en vuelo, devuelva los resultados en el orden original y no aborte todo si una falla.",
+      "hints": [
+        "Promise.all es todo o nada y no limita nada.",
+        "Piensa en N trabajadores consumiendo de un índice compartido.",
+        "Escribir en results[i] conserva el orden aunque terminen desordenadas."
+      ],
+      "approach": "`Promise.all` falla en este caso por dos motivos: **no limita la concurrencia** y es **todo o nada**. Y hay un tercero menos obvio: cuando una rechaza, las demás **siguen ejecutándose**; si alguna también falla, produce rechazos no manejados que nadie recoge.\n\nTampoco sirve trocear en lotes de N y esperar a que acabe cada lote: el lote va al ritmo de la petición más lenta, y mientras tanto hay trabajadores parados. Con latencias variables se desperdicia la mitad del paralelismo.\n\nEl patrón correcto es un **pool de trabajadores**: se lanzan N tareas asíncronas que compiten por consumir de un índice compartido. Cada una coge el siguiente elemento, lo procesa, guarda el resultado en **su posición** y vuelve a por otro. Cuando el índice se agota, terminan.\n\nPor qué funciona sin locks: aunque haya N trabajadores lógicos, **todos corren en el mismo hilo**, y el código entre dos `await` es atómico. `const i = next++` no puede interrumpirse a medias. Es una consecuencia directa del modelo de un solo hilo, y hace que este patrón sea mucho más simple aquí que en un lenguaje con hilos reales.\n\nEl **orden** se conserva escribiendo en `results[i]`, no con `push`. Y los fallos se capturan por tarea y se devuelven como resultado, para que el llamador decida: 950 descargas buenas y 50 malas suele ser un resultado útil, no un fracaso.",
+      "solutionSketch": "```js\nasync function mapConcurrente(items, tarea, { concurrencia = 6 } = {}) {\n  const resultados = new Array(items.length);\n  let siguiente = 0;\n\n  async function trabajador() {\n    while (true) {\n      // Atómico: no hay await entre la lectura y el incremento.\n      const i = siguiente++;\n      if (i >= items.length) return;\n\n      try {\n        resultados[i] = { ok: true, valor: await tarea(items[i], i) };\n      } catch (error) {\n        // Un fallo no aborta el resto.\n        resultados[i] = { ok: false, error };\n      }\n    }\n  }\n\n  await Promise.all(\n    Array.from({ length: Math.min(concurrencia, items.length) }, trabajador),\n  );\n\n  return resultados;\n}\n\n// Uso\nconst r = await mapConcurrente(urls, (u) => fetch(u).then((x) => x.json()));\nconst fallidas = r.filter((x) => !x.ok).length;\n```",
+      "complexity": "Tiempo ≈ (n / concurrencia) × duración media. Memoria O(n) por los resultados, con solo N operaciones vivas a la vez.",
+      "pitfalls": [
+        "Promise.all sin límite: el servidor te bloquea o agotas conexiones.",
+        "Trocear en lotes y esperar a cada uno: desperdicia paralelismo con latencias dispares.",
+        "Usar push: se pierde el orden original.",
+        "Dejar que una excepción escape del trabajador: muere ese trabajador y la concurrencia baja en silencio.",
+        "Subir la concurrencia sin medir: más no siempre es más rápido."
+      ]
+    },
+    {
+      "id": "js-e007",
+      "title": "Event emitter tipado y sin fugas",
+      "difficulty": "medium",
+      "topic": "Patrones",
+      "statement": "Implementa un `EventEmitter` con `on`, `once`, `off` y `emit`. Requisitos: `on` devuelve una función para darse de baja; un listener que lance no debe impedir que se ejecuten los demás; y modificar la lista de listeners durante un `emit` no debe romper la iteración.",
+      "hints": [
+        "¿Qué pasa si un listener llama a off() dentro del propio emit?",
+        "Si un listener lanza, ¿qué pasa con los siguientes?",
+        "once puede implementarse envolviendo el listener."
+      ],
+      "approach": "La versión básica es un `Map` de evento a lista de listeners. Lo que distingue una implementación sólida son los tres casos borde que el enunciado señala, y que son bugs reales en emisores caseros:\n\n**1. Modificación durante la iteración.** Un listener que se da de baja a sí mismo (o registra otro) mientras se está emitiendo corrompe el recorrido: se salta listeners o procesa el nuevo. La defensa es **iterar sobre una copia** (`[...listeners]`). Cuesta una asignación por emit y elimina toda una clase de bugs intermitentes.\n\n**2. Aislamiento de errores.** Si un listener lanza y no lo capturas, los siguientes **no se ejecutan**. Un suscriptor roto tumba a todos los demás, que es lo contrario de lo que se espera de un sistema de eventos. Hay que envolver cada invocación.\n\n**3. Devolver la función de baja.** Que `on` devuelva un `unsubscribe` es mucho mejor API que obligar a conservar la referencia exacta para `off`. Es el patrón que usan los frameworks modernos, y encaja directo con la limpieza de un `useEffect`.\n\nY un detalle de higiene: **borrar la clave cuando la lista queda vacía**, o el `Map` acumula entradas vacías indefinidamente en una aplicación de larga vida.\n\n`once` se implementa envolviendo: el wrapper se da de baja a sí mismo antes de invocar (antes, no después, para que funcione aunque el listener lance).",
+      "solutionSketch": "```js\nclass EventEmitter {\n  #listeners = new Map();   // evento -> Set<fn>\n\n  on(evento, fn) {\n    if (!this.#listeners.has(evento)) this.#listeners.set(evento, new Set());\n    this.#listeners.get(evento).add(fn);\n    return () => this.off(evento, fn);    // baja cómoda\n  }\n\n  once(evento, fn) {\n    const wrapper = (...args) => {\n      this.off(evento, wrapper);   // antes de invocar, por si lanza\n      fn(...args);\n    };\n    return this.on(evento, wrapper);\n  }\n\n  off(evento, fn) {\n    const set = this.#listeners.get(evento);\n    if (!set) return;\n    set.delete(fn);\n    if (set.size === 0) this.#listeners.delete(evento);  // sin basura\n  }\n\n  emit(evento, ...args) {\n    const set = this.#listeners.get(evento);\n    if (!set) return false;\n\n    // Copia: un listener puede darse de baja durante la emisión.\n    for (const fn of [...set]) {\n      try {\n        fn(...args);\n      } catch (error) {\n        // Un suscriptor roto no debe tumbar a los demás.\n        queueMicrotask(() => { throw error; });\n      }\n    }\n    return true;\n  }\n}\n```",
+      "complexity": "O(1) para on y off con Set; O(n) para emit sobre n listeners, más la copia.",
+      "pitfalls": [
+        "Iterar directamente sobre la lista: se rompe si un listener se da de baja durante el emit.",
+        "No capturar excepciones: un listener roto impide que se ejecuten los siguientes.",
+        "Dejar claves con listas vacías en el Map: crecimiento silencioso.",
+        "Tragarse el error en silencio: relanzarlo en un microtask lo hace visible sin romper la emisión.",
+        "Un emitter global que nadie limpia es una fuente clásica de fugas."
+      ]
+    },
+    {
+      "id": "js-e008",
+      "title": "Procesar un fichero enorme con streams",
+      "difficulty": "hard",
+      "topic": "Streams",
+      "statement": "En Node, procesa un CSV de 5 GB: cuenta las filas que cumplen una condición y calcula una media, con memoria constante. Después, la versión en el navegador con la Streams API sobre la respuesta de un `fetch`.",
+      "hints": [
+        "readFileSync carga los 5 GB de golpe.",
+        "Los trozos de un stream no coinciden con los límites de línea ni de carácter UTF-8.",
+        "Una media se calcula acumulando suma y cuenta."
+      ],
+      "approach": "El error obvio es `readFileSync` o `readFile`: 5 GB no caben, y en Node el heap tiene un tope por debajo de eso.\n\nLa solución es **procesar en flujo**: leer, transformar y descartar, manteniendo en memoria solo la fila actual y los acumuladores.\n\nEl detalle que hace que esto funcione y que mucha gente implementa mal a mano: **los trozos que entrega el stream no coinciden con los límites de línea ni con los de carácter UTF-8**. Un chunk puede cortar por la mitad un carácter acentuado o una fila. En Node, `readline` gestiona eso correctamente; en el navegador, `TextDecoderStream` con `{ stream: true }` mantiene los bytes pendientes entre trozos. Hacer `chunk.toString().split('\\n')` produce datos corruptos justo en los límites, y solo se nota con ficheros grandes y con acentos.\n\nSobre los acumuladores: media, cuenta, máximo y mínimo se calculan en una pasada con memoria constante. La **mediana y los percentiles no**: requieren dos pasadas o un algoritmo aproximado (t-digest).\n\nY en Node, `for await...of` sobre el stream da **contrapresión** gratis: mientras procesas una línea no se lee más del disco. Eso es lo que mantiene la memoria plana. Si en su lugar acumulas en un array \"para procesarlo después\", has anulado toda la ventaja.\n\nUn aviso: un CSV real con comas dentro de comillas necesita un parser de verdad (`csv-parse`), no `split(',')`.",
+      "solutionSketch": "```js\n// --- Node\nimport { createReadStream } from 'node:fs';\nimport { createInterface } from 'node:readline';\n\nasync function procesar(ruta) {\n  const rl = createInterface({\n    input: createReadStream(ruta, { encoding: 'utf8' }),\n    crlfDelay: Infinity,          // trata \\r\\n como un solo salto\n  });\n\n  let cumplen = 0, suma = 0, contados = 0, primera = true;\n\n  // await for: contrapresión automática, memoria constante.\n  for await (const linea of rl) {\n    if (primera) { primera = false; continue; }\n    if (!linea) continue;\n\n    const campos = linea.split(',');\n    const valor = Number(campos[2]);\n    if (Number.isNaN(valor)) continue;   // fila corrupta: no abortar\n\n    if (campos[1] === 'activo') cumplen++;\n    suma += valor;\n    contados++;\n  }\n\n  return { cumplen, media: contados ? suma / contados : 0 };\n}\n\n// --- Navegador\nasync function procesarRemoto(url) {\n  const res = await fetch(url);\n  const reader = res.body\n    .pipeThrough(new TextDecoderStream())   // gestiona UTF-8 partido\n    .getReader();\n\n  let resto = '', contados = 0, suma = 0;\n\n  while (true) {\n    const { value, done } = await reader.read();\n    if (done) break;\n\n    const lineas = (resto + value).split('\\n');\n    resto = lineas.pop();          // la última puede estar incompleta\n\n    for (const l of lineas) {\n      const v = Number(l.split(',')[2]);\n      if (!Number.isNaN(v)) { suma += v; contados++; }\n    }\n  }\n  return { media: contados ? suma / contados : 0 };\n}\n```",
+      "complexity": "O(n) en tiempo, O(1) en memoria: solo la línea actual y los acumuladores, sea cual sea el tamaño del fichero.",
+      "pitfalls": [
+        "readFileSync o readFile: no caben 5 GB en el heap.",
+        "Hacer split('\\n') sobre cada chunk sin guardar el resto: se parten filas en los límites.",
+        "Decodificar cada chunk por separado: se corrompen los caracteres multibyte.",
+        "Acumular las líneas en un array para procesarlas después: anula la ventaja.",
+        "Abortar el proceso entero por una fila mal formada de cinco millones."
+      ]
+    },
+    {
+      "id": "js-e009",
+      "title": "Cola offline con reintentos e idempotencia",
+      "difficulty": "hard",
+      "topic": "Arquitectura",
+      "statement": "Los usuarios crean notas sin conexión. Diseña la cola de sincronización: persistencia de las operaciones pendientes, reintentos con backoff, idempotencia, orden, y qué pasa si el servidor rechaza una operación de forma permanente.",
+      "hints": [
+        "Si la cola vive en memoria, se pierde al cerrar la pestaña.",
+        "¿Qué pasa si la petición llega al servidor pero la respuesta se pierde?",
+        "Un 500 y un 422 no se tratan igual."
+      ],
+      "approach": "El patrón es un **outbox**: una tabla persistida de operaciones pendientes en **IndexedDB**, no una lista en memoria. Si la cola no sobrevive a cerrar la pestaña, no es offline-first.\n\nCada entrada necesita: id de cliente (UUID), tipo, payload, número de intentos, marca de tiempo y estado.\n\nLos puntos que determinan si el diseño es correcto:\n\n**Idempotencia.** El caso que rompe las implementaciones ingenuas: la petición llega al servidor, este la procesa, y la respuesta se pierde por un corte. El cliente no sabe si se aplicó y reintenta. Sin protección, se crean dos notas. La solución es que **el cliente genere el id** y el servidor trate un id repetido como la misma operación (cabecera `Idempotency-Key`). Esto exige un **acuerdo con el backend**: no es una decisión que se pueda tomar solo en el cliente, y es lo que más se olvida al plantear el diseño.\n\n**Clasificación de errores.** Reintentar a ciegas es un error de diseño:\n- Red o 5xx → **transitorio**: backoff exponencial **con jitter**. Sin jitter, todos los clientes reintentan a la vez tras una caída y tumban el servidor justo cuando se recupera.\n- 4xx de validación → **permanente**: reintentar no va a cambiar nada. Marcar como fallida y avisar.\n- 401 → refrescar el token y reintentar una vez.\n\n**Orden.** Si las operaciones dependen entre sí (crear y luego editar), hay que procesar **en serie por entidad**. En paralelo, la edición puede llegar antes que la creación.\n\n**Visibilidad.** El usuario tiene que ver el estado: pendiente, sincronizado, fallido. Una nota que desaparece en silencio porque el servidor la rechazó destruye la confianza más que un error visible.\n\nY en la web hay una pieza extra: el evento `online`, el `visibilitychange` y, si quieres sincronización en segundo plano de verdad, un **Service Worker** con Background Sync.",
+      "solutionSketch": "```js\n// Cada operación lleva su clave de idempotencia desde el cliente.\nasync function encolar(tipo, payload, entidadId) {\n  await db.put('outbox', {\n    id: crypto.randomUUID(),      // clave de idempotencia\n    entidadId,                    // para ordenar por entidad\n    tipo,\n    payload,\n    intentos: 0,\n    creadoEn: Date.now(),\n    estado: 'pendiente',\n  });\n  aplicarLocalmente(tipo, payload);   // optimista: la UI no espera\n  procesarCola();\n}\n\nasync function procesarCola() {\n  if (!navigator.onLine) return;\n\n  const pendientes = await db.getAllFromIndex('outbox', 'creadoEn');\n\n  for (const op of pendientes) {\n    try {\n      await api.aplicar(op, { headers: { 'Idempotency-Key': op.id } });\n      await db.delete('outbox', op.id);\n    } catch (e) {\n      if (esPermanente(e)) {\n        // 4xx de validación: reintentar no cambia nada.\n        await db.put('outbox', { ...op, estado: 'fallida', error: `${e}` });\n        notificarUsuario(op, e);\n        continue;\n      }\n      // Transitorio: backoff exponencial CON jitter.\n      const espera = Math.min(2 ** op.intentos * 1000, 60_000);\n      const conJitter = Math.random() * espera;\n      await db.put('outbox', { ...op, intentos: op.intentos + 1 });\n      setTimeout(procesarCola, conJitter);\n      return;   // preservar el orden: no saltar a la siguiente\n    }\n  }\n}\n\nconst esPermanente = (e) => e.status >= 400 && e.status < 500 && e.status !== 401;\n\nwindow.addEventListener('online', procesarCola);\n```",
+      "complexity": "O(n) por pasada sobre las pendientes. El backoff exponencial acota los reintentos en el tiempo y protege al servidor.",
+      "pitfalls": [
+        "Cola en memoria: se pierde al cerrar la pestaña, y con ella el trabajo del usuario.",
+        "Sin clave de idempotencia: duplicados cada vez que se pierde una respuesta.",
+        "Reintentar indefinidamente errores permanentes: la cola se atasca y no progresa.",
+        "Backoff sin jitter: avalancha sincronizada cuando el servidor vuelve.",
+        "Procesar en paralelo operaciones dependientes y aplicarlas en desorden.",
+        "Fiarse de navigator.onLine: dice que hay red, no que haya internet."
+      ]
+    },
+    {
+      "id": "js-e010",
+      "title": "Lista virtualizada de 100.000 filas",
+      "difficulty": "hard",
+      "topic": "Rendimiento",
+      "statement": "Renderiza una lista de 100.000 elementos con scroll fluido, sin librerías. Después, extiéndelo a filas de **altura variable**, que es donde la técnica se complica de verdad.",
+      "hints": [
+        "100.000 nodos en el DOM no son viables. ¿Cuántos se ven a la vez?",
+        "Con altura fija, la posición de la fila i es i × altura.",
+        "Con altura variable no sabes dónde está la fila 50.000 hasta medirla."
+      ],
+      "approach": "El principio: **renderizar solo lo visible**. Con 100.000 filas en el DOM, el navegador colapsa en layout y memoria; con veinte, va fluido sea cual sea el total.\n\n**Altura fija** es aritmética simple:\n- Un contenedor espaciador de `total × altura` da la barra de scroll correcta.\n- `primeraVisible = floor(scrollTop / altura)`.\n- Se renderizan las que caben más un **overscan** de unas pocas arriba y abajo, para que un scroll rápido no muestre huecos en blanco.\n- Las filas se desplazan con un `transform: translateY`, que se compone en la GPU y no provoca layout.\n\n**Altura variable** es el problema de verdad, porque hay una circularidad: no sabes lo que mide una fila hasta renderizarla, pero para saber cuáles renderizar necesitas saber cuánto miden las anteriores.\n\nLa solución estándar es **estimar y corregir**:\n1. Partir de una altura estimada para todas.\n2. Medir las que se renderizan (`ResizeObserver`) y guardar la medida real.\n3. Mantener un array de **offsets acumulados** para poder localizar una fila por posición con **búsqueda binaria** (O(log n)) en lugar de sumando (O(n)).\n4. Al corregir una altura, ajustar `scrollTop` si la fila corregida estaba **por encima** de la vista; si no, el contenido salta bajo el dedo del usuario. Este es el detalle que separa una virtualización usable de una mareante.\n\nY la comprobación honesta antes de escribir nada: `content-visibility: auto` en CSS resuelve una parte del problema sin JavaScript, y en producción `TanStack Virtual` está probado en casos que tú no has previsto. Escribirlo una vez sirve para entenderlo; usarlo en producción rara vez se justifica.",
+      "solutionSketch": "```js\n// --- Altura fija\nfunction render(scrollTop) {\n  const ALTURA = 40, OVERSCAN = 5;\n  const visibles = Math.ceil(viewport.clientHeight / ALTURA);\n  const inicio = Math.max(0, Math.floor(scrollTop / ALTURA) - OVERSCAN);\n  const fin = Math.min(items.length, inicio + visibles + OVERSCAN * 2);\n\n  espaciador.style.height = `${items.length * ALTURA}px`;\n  // translateY, no top: se compone en GPU, sin layout.\n  contenido.style.transform = `translateY(${inicio * ALTURA}px)`;\n  contenido.replaceChildren(...items.slice(inicio, fin).map(fila));\n}\n\nviewport.addEventListener('scroll', () => {\n  // rAF, no throttle: sincroniza con el repintado.\n  requestAnimationFrame(() => render(viewport.scrollTop));\n}, { passive: true });\n\n// --- Altura variable: offsets acumulados + búsqueda binaria\nconst alturas = new Array(items.length).fill(ESTIMADA);\nconst offsets = new Float64Array(items.length + 1);\n\nfunction recalcularDesde(i) {\n  for (let k = i; k < alturas.length; k++) offsets[k + 1] = offsets[k] + alturas[k];\n}\n\nfunction indiceEn(y) {          // O(log n) en vez de O(n)\n  let lo = 0, hi = alturas.length - 1;\n  while (lo < hi) {\n    const mid = (lo + hi + 1) >> 1;\n    if (offsets[mid] <= y) lo = mid; else hi = mid - 1;\n  }\n  return lo;\n}\n\nconst ro = new ResizeObserver((entries) => {\n  let minCambiado = Infinity;\n  for (const e of entries) {\n    const i = Number(e.target.dataset.index);\n    const real = e.contentRect.height;\n    if (Math.abs(alturas[i] - real) < 0.5) continue;\n    // Si la fila corregida está por encima, compensar para no dar un salto.\n    if (i < primeraVisible) viewport.scrollTop += real - alturas[i];\n    alturas[i] = real;\n    minCambiado = Math.min(minCambiado, i);\n  }\n  if (minCambiado !== Infinity) { recalcularDesde(minCambiado); render(viewport.scrollTop); }\n});\n```",
+      "complexity": "O(visibles) por frame en vez de O(total). Localizar una fila: O(1) con altura fija, O(log n) con altura variable.",
+      "pitfalls": [
+        "Renderizar los 100.000 nodos: el navegador se ahoga en layout y memoria.",
+        "Usar `top` en vez de `transform`: provoca layout en cada frame.",
+        "No compensar scrollTop al corregir alturas de filas anteriores: el contenido salta bajo el dedo.",
+        "Sumar offsets linealmente: O(n) en cada evento de scroll.",
+        "Sin overscan: huecos en blanco al hacer scroll rápido.",
+        "Reinventarlo en producción cuando content-visibility o una librería probada bastan."
+      ]
+    }
+  ],
+  "roadmap": {
+    "stages": [
+      {
+        "id": "js-s1",
+        "level": "junior",
+        "title": "Etapa 1 · El lenguaje, no el framework",
+        "estimatedWeeks": 10,
+        "goal": "Escribir JavaScript sin depender de un framework para entender lo que pasa. Mucha gente entra por React y nunca aprende el lenguaje: acaba atascada en errores que no son de React y sin saber por dónde empezar a mirar.",
+        "skills": [
+          "Sintaxis moderna",
+          "Tipos y coerción",
+          "Funciones y closures",
+          "Arrays y objetos",
+          "DOM",
+          "Git"
+        ],
+        "milestones": [
+          {
+            "id": "js-m101",
+            "title": "Tres proyectos sin framework",
+            "detail": "Algo interactivo solo con HTML, CSS y JavaScript: un juego, una calculadora, un consumidor de una API pública. Manipular el DOM a mano una temporada te da un modelo mental que después agradeces."
+          },
+          {
+            "id": "js-m102",
+            "title": "Domina arrays y objetos",
+            "detail": "map, filter, reduce, find, some, every, destructuring y spread sin buscar la sintaxis. Es el 80% del código que escribirás."
+          },
+          {
+            "id": "js-m103",
+            "title": "Entiende this y los closures",
+            "detail": "Hasta poder explicar por qué un callback pierde el this y por qué un bucle con var y setTimeout imprime el mismo número. Son los dos temas que más se preguntan en entrevistas junior."
+          },
+          {
+            "id": "js-m104",
+            "title": "Asincronía de verdad",
+            "detail": "Promesas y async/await entendiendo el orden de ejecución. Predice la salida de un fragmento con setTimeout y promesas antes de ejecutarlo, y repite hasta acertar siempre."
+          },
+          {
+            "id": "js-m105",
+            "title": "Publica algo",
+            "detail": "Súbelo a GitHub Pages o Netlify y ponlo en manos de otra persona. Cerrar el ciclo completo enseña cosas que ningún tutorial cuenta."
+          }
+        ],
+        "resources": [
+          {
+            "title": "MDN JavaScript Guide",
+            "url": "https://developer.mozilla.org/es/docs/Web/JavaScript/Guide",
+            "kind": "docs"
+          },
+          {
+            "title": "javascript.info",
+            "url": "https://es.javascript.info/",
+            "kind": "docs"
+          },
+          {
+            "title": "Eloquent JavaScript",
+            "url": "https://eloquentjavascript.net/",
+            "kind": "book"
+          },
+          {
+            "title": "JavaScript30",
+            "url": "https://javascript30.com/",
+            "kind": "course"
+          }
+        ],
+        "readinessSignals": [
+          "Lees código JavaScript ajeno sin tropezar con la sintaxis.",
+          "Distingues si un error es del lenguaje, del navegador o de la librería.",
+          "Explicas por qué un fragmento asíncrono imprime en ese orden."
+        ]
+      },
+      {
+        "id": "js-s2",
+        "level": "junior",
+        "title": "Etapa 2 · Oficio: que funcione bien",
+        "estimatedWeeks": 14,
+        "goal": "Pasar de \"funciona en mi navegador\" a \"funciona para usuarios reales\". Aquí se aprende que el camino feliz es la parte fácil: el trabajo está en los bordes.",
+        "skills": [
+          "Un framework",
+          "Testing",
+          "Herramientas de build",
+          "Manejo de errores",
+          "Accesibilidad",
+          "TypeScript básico"
+        ],
+        "milestones": [
+          {
+            "id": "js-m201",
+            "title": "Un framework a fondo",
+            "detail": "Elige uno (React, Vue o Svelte) y quédate al menos un año. Saltar de uno a otro cada tres meses impide llegar a entender ninguno."
+          },
+          {
+            "id": "js-m202",
+            "title": "Empieza con TypeScript",
+            "detail": "Aunque sea en modo permisivo. Cuanto antes lo adoptes, menos código sin tipar tendrás que migrar después, y el salto conceptual es más pequeño de lo que parece."
+          },
+          {
+            "id": "js-m203",
+            "title": "Tu primer test que atrapa un bug real",
+            "detail": "No cobertura por cobertura. Escribe un test, refactoriza y deja que el test te avise. Esa sensación es lo que convierte los tests en un hábito."
+          },
+          {
+            "id": "js-m204",
+            "title": "Los cuatro estados, siempre",
+            "detail": "Carga, error, vacío y contenido en cada pantalla que consuma datos. Y sin conexión: ¿qué ve el usuario? Prueba con la red simulada lenta."
+          },
+          {
+            "id": "js-m205",
+            "title": "Accesibilidad básica",
+            "detail": "Recorre una aplicación tuya solo con el teclado y con un lector de pantalla. Arregla lo que encuentres. Es la habilidad que más te diferencia y la que menos gente practica."
+          },
+          {
+            "id": "js-m206",
+            "title": "Lee código ajeno",
+            "detail": "Coge una librería pequeña de npm y lee su fuente entera. Aprender a leer código es una habilidad distinta de escribirlo y se entrena aparte."
+          }
+        ],
+        "resources": [
+          {
+            "title": "Testing Library",
+            "url": "https://testing-library.com/docs/",
+            "kind": "docs"
+          },
+          {
+            "title": "TypeScript Handbook",
+            "url": "https://www.typescriptlang.org/docs/handbook/intro.html",
+            "kind": "docs"
+          },
+          {
+            "title": "web.dev Learn Accessibility",
+            "url": "https://web.dev/learn/accessibility",
+            "kind": "course"
+          },
+          {
+            "title": "Vite",
+            "url": "https://vitejs.dev/guide/",
+            "kind": "docs"
+          }
+        ],
+        "readinessSignals": [
+          "Escribes tests sin que nadie te lo pida porque te ahorran tiempo.",
+          "Antes de programar una pantalla piensas en sus estados, no en su aspecto.",
+          "Configuras un proyecto desde cero sin copiar un boilerplate."
+        ]
+      },
+      {
+        "id": "js-s3",
+        "level": "mid",
+        "title": "Etapa 3 · La plataforma: saber qué pasa por debajo",
+        "estimatedWeeks": 22,
+        "goal": "Dejar de tratar el navegador y el framework como cajas negras. En esta etapa se empiezan a resolver problemas que no tienen respuesta en Stack Overflow porque dependen de tu contexto concreto.",
+        "skills": [
+          "Event loop",
+          "Rendimiento web",
+          "Seguridad",
+          "Node",
+          "Arquitectura de estado",
+          "Herramientas de build"
+        ],
+        "milestones": [
+          {
+            "id": "js-m301",
+            "title": "Predice el orden de ejecución",
+            "detail": "Coge un fragmento con async, setTimeout, promesas y queueMicrotask y predice la salida exacta. Es el mejor ejercicio que existe para interiorizar el event loop."
+          },
+          {
+            "id": "js-m302",
+            "title": "Optimiza algo medido",
+            "detail": "Coge una página lenta de verdad, perfílala, y documenta el antes y el después con números de Core Web Vitals. Sin medición no es optimizar, es adivinar."
+          },
+          {
+            "id": "js-m303",
+            "title": "Escribe algo de backend",
+            "detail": "Una API en Node con autenticación y base de datos. Entender el otro lado cambia cómo diseñas el frontend y cómo negocias contratos de API."
+          },
+          {
+            "id": "js-m304",
+            "title": "Caza una fuga de memoria",
+            "detail": "Con DevTools, en una aplicación real. Aprende a usar el panel de retainers: es la diferencia entre encontrar la fuga y adivinarla."
+          },
+          {
+            "id": "js-m305",
+            "title": "Seguridad aplicada",
+            "detail": "Monta un XSS en un entorno controlado y luego defiéndete. Entender el ataque es lo único que hace que la defensa tenga sentido."
+          },
+          {
+            "id": "js-m306",
+            "title": "Publica un paquete en npm",
+            "detail": "Algo pequeño pero completo, con tipos, documentación y CHANGELOG. Diseñar una API que usen otros enseña más sobre diseño que diez proyectos internos."
+          },
+          {
+            "id": "js-m307",
+            "title": "Revisa código ajeno",
+            "detail": "Participa en revisiones con criterio. Explicar por qué algo debería ser distinto obliga a entender el porqué, no solo el qué."
+          }
+        ],
+        "resources": [
+          {
+            "title": "web.dev Performance",
+            "url": "https://web.dev/explore/fast",
+            "kind": "docs"
+          },
+          {
+            "title": "Jake Archibald: In The Loop",
+            "url": "https://www.youtube.com/watch?v=cCOL7MC4Pl0",
+            "kind": "video"
+          },
+          {
+            "title": "OWASP Top Ten",
+            "url": "https://owasp.org/www-project-top-ten/",
+            "kind": "docs"
+          },
+          {
+            "title": "Node.js Guides",
+            "url": "https://nodejs.org/en/learn",
+            "kind": "docs"
+          },
+          {
+            "title": "V8 blog",
+            "url": "https://v8.dev/blog",
+            "kind": "article"
+          }
+        ],
+        "readinessSignals": [
+          "Diagnosticas un problema de rendimiento sin cambiar código al azar.",
+          "Lees el código fuente de una librería cuando la documentación no basta.",
+          "Otras personas del equipo te preguntan antes de tomar decisiones técnicas."
+        ]
+      },
+      {
+        "id": "js-s4",
+        "level": "senior",
+        "title": "Etapa 4 · Criterio: decidir y multiplicar",
+        "estimatedWeeks": 40,
+        "goal": "El salto a senior no es saber más JavaScript. Es tomar decisiones con información incompleta, asumir sus consecuencias, y hacer que el equipo entero rinda mejor. Un senior que solo programa muy bien es un mid muy rápido.",
+        "skills": [
+          "Arquitectura a escala",
+          "Decisiones técnicas",
+          "Mentoría",
+          "Comunicación con negocio",
+          "Gestión de deuda",
+          "Operación"
+        ],
+        "milestones": [
+          {
+            "id": "js-m401",
+            "title": "Una decisión arquitectónica documentada",
+            "detail": "Escribe un ADR real: contexto, opciones consideradas, criterios, decisión y consecuencias negativas asumidas. Un ADR que solo enumera ventajas no es un análisis."
+          },
+          {
+            "id": "js-m402",
+            "title": "Monta un monorepo con límites reales",
+            "detail": "Varios paquetes donde la arquitectura la imponga la herramienta y no la disciplina. Mide el efecto en tiempos de CI y en conflictos de merge."
+          },
+          {
+            "id": "js-m403",
+            "title": "Rescata código heredado",
+            "detail": "Coge una base sin tests y mejórala de forma incremental, sin parar las entregas y sin proponer una reescritura. Es el escenario más común y el que peor se maneja."
+          },
+          {
+            "id": "js-m404",
+            "title": "Defiende una decisión ante negocio",
+            "detail": "Justifica una inversión técnica en términos de coste y riesgo, no de elegancia. \"Es más limpio\" no es un argumento; \"reduce el tiempo de incidencia un 40%\" sí."
+          },
+          {
+            "id": "js-m405",
+            "title": "Gestiona un incidente en producción",
+            "detail": "Detección, mitigación, comunicación y post-mortem sin culpables. La parte difícil no es el arreglo: es decidir con información parcial y con gente esperando."
+          },
+          {
+            "id": "js-m406",
+            "title": "Haz crecer a alguien",
+            "detail": "Acompaña a un junior durante meses hasta que resuelva solo cosas que antes te traía. Es la habilidad que más distingue a un senior y la que menos se practica."
+          },
+          {
+            "id": "js-m407",
+            "title": "Deja el sistema mejor que el código",
+            "detail": "Convierte conocimiento tácito en reglas de lint, plantillas y ADRs. Si el equipo solo mejora cuando tú revisas, no has resuelto el problema."
+          }
+        ],
+        "resources": [
+          {
+            "title": "Architecture Decision Records",
+            "url": "https://adr.github.io/",
+            "kind": "article"
+          },
+          {
+            "title": "The Staff Engineer's Path — Tanya Reilly",
+            "url": "https://www.oreilly.com/library/view/the-staff-engineers/9781098118723/",
+            "kind": "book"
+          },
+          {
+            "title": "A Philosophy of Software Design — John Ousterhout",
+            "url": "https://web.stanford.edu/~ouster/cgi-bin/book.php",
+            "kind": "book"
+          },
+          {
+            "title": "Working Effectively with Legacy Code — Michael Feathers",
+            "url": "https://www.oreilly.com/library/view/working-effectively-with/0131177052/",
+            "kind": "book"
+          }
+        ],
+        "readinessSignals": [
+          "Te consultan decisiones antes de tomarlas, no después de romperlas.",
+          "Tu impacto se nota en trabajo que no escribiste tú.",
+          "Sabes explicar un compromiso técnico a alguien que no programa.",
+          "Cambias de opinión cuando aparecen datos nuevos, sin que te cueste."
+        ]
+      }
+    ]
+  }
+}
