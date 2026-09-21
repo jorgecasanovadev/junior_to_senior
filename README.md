@@ -19,13 +19,13 @@ Además, cada pregunta incluye una **rúbrica por nivel**: cómo suena la respue
 
 | | |
 |---|---|
-| Tecnologías con contenido | Flutter, Dart, JavaScript |
-| Preguntas | 150 (50 por tecnología) |
-| Ejercicios | 30 |
-| Etapas de ruta | 12, con 75 hitos |
+| Tecnologías con contenido | Flutter, Dart, JavaScript, TypeScript |
+| Preguntas | 200 (50 por tecnología) |
+| Ejercicios | 40 |
+| Etapas de ruta | 16, con 98 hitos |
 | Plataformas | Android · iOS · Web |
 
-En camino: TypeScript, React, Vue, Python y Django.
+En camino: React, Vue, Python y Django.
 
 Añadir una tecnología nueva es escribir un fichero JSON. No hace falta tocar código Dart. Ver [CONTRIBUTING.md](CONTRIBUTING.md).
 

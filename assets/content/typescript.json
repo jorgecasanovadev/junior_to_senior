@@ -1,0 +1,1510 @@
+{
+  "schemaVersion": 1,
+  "technologyId": "typescript",
+  "name": "TypeScript",
+  "questions": [
+    {
+      "id": "ts-q001",
+      "level": "junior",
+      "topic": "Fundamentos",
+      "tags": [
+        "tipos",
+        "fundamentos"
+      ],
+      "prompt": "¿Qué aporta TypeScript sobre JavaScript y qué no?",
+      "answer": "**Lo que aporta**: un sistema de tipos estático que comprueba en tiempo de compilación. Detecta errores antes de ejecutar, documenta las firmas de forma verificable (a diferencia de un comentario, que puede mentir), hace el autocompletado y el refactor fiables, y elimina toda una clase de bugs de `undefined is not a function`.\n\n**Lo que no aporta, y es igual de importante**: TypeScript **no existe en tiempo de ejecución**. Los tipos se borran al compilar (*type erasure*). Consecuencias concretas:\n\n- No valida datos que vienen de fuera. Si una API devuelve algo distinto de lo que declaraste, TypeScript no se entera: dijiste que era `User` y él te cree.\n- No hace el código más rápido. No hay optimización por tipos, a diferencia de un lenguaje compilado.\n- No impide errores de lógica.\n\nDe ahí la regla más importante: **en las fronteras del sistema (red, almacenamiento, formularios) hay que validar en runtime**, con Zod o similar. Los tipos protegen tu código de sí mismo; no del mundo exterior.",
+      "rubric": {
+        "junior": "Dice que añade tipos y detecta errores antes de ejecutar.",
+        "mid": "Sabe que los tipos se borran al compilar y que no validan datos externos.",
+        "senior": "Articula la frontera: tipos para la coherencia interna, validación en runtime para los datos de fuera. Menciona que el valor real en equipos grandes es hacer el refactor seguro, más que evitar typos."
+      },
+      "followUps": [
+        "¿Qué pasa si la API devuelve algo distinto de lo declarado?",
+        "¿TypeScript hace el código más rápido?"
+      ]
+    },
+    {
+      "id": "ts-q002",
+      "level": "junior",
+      "topic": "Fundamentos",
+      "tags": [
+        "any",
+        "unknown"
+      ],
+      "prompt": "¿Qué diferencia hay entre any, unknown y never?",
+      "answer": "- **`any`**: desactiva el comprobador. Cualquier operación está permitida y el error salta en runtime. Es contagioso: lo que toca un `any` pierde sus garantías.\n- **`unknown`**: el tipo tope **seguro**. Acepta cualquier valor, pero **no puedes hacer nada con él** hasta comprobar qué es. Obliga a estrechar antes de usar.\n- **`never`**: el tipo vacío, no existe ningún valor de ese tipo. Es lo que devuelve una función que nunca retorna (lanza o entra en bucle infinito), y el resultado de una unión imposible.\n\n```ts\nfunction f(a: any, u: unknown) {\n  a.loQueSea();        // compila, revienta en runtime\n  // u.loQueSea();     // error de compilación: bien\n  if (typeof u === 'string') u.toUpperCase();  // ahora sí\n}\n```\n\nRegla: **donde ibas a poner `any`, pon `unknown`**. Obliga a comprobar, que es lo que querías de TypeScript en primer lugar.\n\n`never` tiene un uso valioso: comprobar exhaustividad. Si asignas a `never` en el `default` de un switch y añades una variante a la unión, **deja de compilar** justo donde hay que actualizar.",
+      "rubric": {
+        "junior": "Distingue any de unknown y sabe que any desactiva las comprobaciones.",
+        "mid": "Prefiere unknown y sabe estrecharlo; conoce never como tipo vacío.",
+        "senior": "Usa never para comprobación exhaustiva en switches, explica que any es contagioso y degrada el tipado alrededor, y limita any a los bordes con una regla de lint que lo prohíba."
+      },
+      "followUps": [
+        "¿Cómo garantizas que un switch cubre todos los casos?",
+        "¿Por qué se dice que any es contagioso?"
+      ]
+    },
+    {
+      "id": "ts-q003",
+      "level": "junior",
+      "topic": "Tipos",
+      "tags": [
+        "interface",
+        "type"
+      ],
+      "prompt": "¿Cuándo usas interface y cuándo type?",
+      "answer": "Se solapan mucho. Las diferencias reales:\n\n**Solo `interface`**:\n- **Declaration merging**: dos interfaces con el mismo nombre se fusionan. Es lo que permite extender tipos de una librería de terceros desde fuera.\n\n**Solo `type`**:\n- Uniones: `type Estado = 'ok' | 'error'`.\n- Tuplas, tipos primitivos con alias, mapped types y conditional types.\n\n```ts\ninterface Usuario { id: string }\ninterface Usuario { nombre: string }   // se fusionan\n\ntype Resultado = Exito | Fallo;        // solo con type\ntype Par = [number, number];\n```\n\nLos dos soportan extensión (`extends` en interface, `&` en type) y los dos se pueden implementar en una clase.\n\nLa convención habitual: **`interface` para la forma de objetos**, sobre todo si es una API pública que otros pueden querer extender; **`type` para todo lo demás** (uniones, utilidades, composición).\n\nUn matiz práctico: los mensajes de error con interfaces suelen ser más legibles, porque TypeScript conserva el nombre en vez de expandir la estructura.",
+      "rubric": {
+        "junior": "Sabe que ambos definen formas y nombra alguna diferencia.",
+        "mid": "Conoce el declaration merging y que las uniones solo se hacen con type.",
+        "senior": "Elige según si el tipo es API pública extensible, valora la legibilidad de los errores, y sabe que merging es potente pero también una fuente de sorpresas en bases grandes."
+      },
+      "followUps": [
+        "¿Qué es el declaration merging y cuándo lo has usado?",
+        "¿Puede una clase implementar un type?"
+      ]
+    },
+    {
+      "id": "ts-q004",
+      "level": "junior",
+      "topic": "Tipos",
+      "tags": [
+        "uniones",
+        "estrechamiento"
+      ],
+      "prompt": "¿Qué es el narrowing y cómo se estrecha un tipo?",
+      "answer": "Estrechar es pasar de un tipo amplio a uno más concreto dentro de un bloque, para poder operar con él. TypeScript lo hace mediante **análisis de flujo de control**.\n\nFormas de estrechar:\n\n```ts\nif (typeof x === 'string') { }        // typeof, para primitivos\nif (x instanceof Date) { }            // instanceof, para clases\nif ('email' in obj) { }               // in, por presencia de propiedad\nif (x !== null) { }                   // comprobación de igualdad\nif (Array.isArray(x)) { }             // type guard de la librería estándar\n\n// Unión discriminada: la forma más potente\nswitch (accion.tipo) {\n  case 'crear': accion.payload;       // aquí el tipo ya es el concreto\n}\n```\n\nY los **type predicates**, para escribir tus propios guards:\n\n```ts\nfunction esUsuario(x: unknown): x is Usuario {\n  return typeof x === 'object' && x !== null && 'id' in x;\n}\n```\n\nEl aviso sobre `x is T`: **TypeScript te cree**. Si el cuerpo del guard no comprueba de verdad lo que promete, has mentido al compilador y el error aparecerá lejos. Un predicate mal escrito es peor que un `as`, porque parece seguro.\n\nY una trampa frecuente: el estrechamiento **se pierde tras un `await`** o dentro de un callback, porque TypeScript no puede demostrar que el valor no cambió.",
+      "rubric": {
+        "junior": "Usa typeof e instanceof para comprobar tipos.",
+        "mid": "Conoce las uniones discriminadas y escribe type predicates.",
+        "senior": "Advierte de que un predicate es una promesa que TypeScript no verifica, conoce la pérdida de estrechamiento tras un await o en closures, y prefiere uniones discriminadas a guards ad hoc."
+      },
+      "followUps": [
+        "¿Por qué se pierde el narrowing dentro de un callback?",
+        "¿Qué riesgo tiene un type predicate?"
+      ]
+    },
+    {
+      "id": "ts-q005",
+      "level": "junior",
+      "topic": "Tipos",
+      "tags": [
+        "uniones discriminadas"
+      ],
+      "prompt": "¿Qué es una unión discriminada y por qué es la herramienta más útil de TypeScript?",
+      "answer": "Una unión de tipos objeto que comparten una propiedad literal que actúa de **discriminante**. Al comprobarla, TypeScript sabe exactamente cuál de las variantes tienes.\n\n```ts\ntype Estado =\n  | { estado: 'cargando' }\n  | { estado: 'error'; mensaje: string }\n  | { estado: 'listo'; datos: Usuario[] };\n\nfunction render(e: Estado) {\n  switch (e.estado) {\n    case 'cargando': return <Spinner />;\n    case 'error':    return <Error texto={e.mensaje} />;   // mensaje existe\n    case 'listo':    return <Lista items={e.datos} />;     // datos existe\n  }\n}\n```\n\nPor qué es tan útil: **hace irrepresentables los estados imposibles**. La alternativa habitual, tres campos sueltos:\n\n```ts\n{ cargando: boolean; error?: string; datos?: Usuario[] }\n```\n\npermite 2×2×2 = 8 combinaciones, de las cuales solo 3 tienen sentido. Las otras cinco son bugs esperando: cargando **y** con error, listo pero sin datos. Y te obliga a `datos!` por todas partes.\n\nCon la unión, esos estados **no se pueden escribir**. El bug deja de existir como categoría, en vez de ser algo que hay que recordar no provocar.\n\nY con `never` en el `default`, añadir una variante nueva rompe la compilación en todos los sitios que hay que actualizar, que es exactamente lo que quieres.",
+      "rubric": {
+        "junior": "Reconoce el patrón y sabe hacer switch sobre el discriminante.",
+        "mid": "Explica que elimina estados imposibles y compara con las banderas sueltas.",
+        "senior": "Cuantifica la reducción de combinaciones válidas, usa never para exhaustividad, y lo aplica como principio general de modelado más allá del estado de carga."
+      },
+      "followUps": [
+        "¿Cómo modelarías el estado de una petición?",
+        "¿Cómo garantizas que tratas todas las variantes?"
+      ]
+    },
+    {
+      "id": "ts-q006",
+      "level": "junior",
+      "topic": "Tipos",
+      "tags": [
+        "genericos"
+      ],
+      "prompt": "¿Qué son los genéricos y cuándo los usas?",
+      "answer": "Parámetros de tipo: permiten escribir algo que funciona con muchos tipos **sin perder la información de cuál**.\n\n```ts\n// Sin genéricos: pierdes el tipo\nfunction primeroMal(arr: any[]): any { return arr[0]; }\n\n// Con genéricos: lo conservas\nfunction primero<T>(arr: T[]): T | undefined { return arr[0]; }\n\nprimero([1, 2, 3]);       // number | undefined\nprimero(['a']);           // string | undefined\n```\n\nSe pueden **restringir** con `extends`, que es lo que los hace realmente útiles:\n\n```ts\nfunction porId<T extends { id: string }>(items: T[], id: string) {\n  return items.find((i) => i.id === id);   // sabe que T tiene id\n}\n```\n\nY tener valores por defecto: `<T = string>`.\n\nCuándo usarlos: cuando hay una **relación** entre los tipos de entrada y de salida que quieres conservar. Si no hay relación, un genérico sobra y solo añade ruido.\n\nLa señal de que te has pasado: un genérico que aparece **una sola vez** en la firma. `function f<T>(x: T): void` no aporta nada sobre `function f(x: unknown): void`; el parámetro de tipo no relaciona nada.",
+      "rubric": {
+        "junior": "Escribe una función genérica simple y entiende para qué sirve.",
+        "mid": "Usa restricciones con extends y valores por defecto.",
+        "senior": "Aplica la regla de que un parámetro de tipo debe aparecer al menos dos veces para aportar algo, y prioriza la legibilidad: un genérico complejo que nadie entiende es peor que dos sobrecargas claras."
+      },
+      "followUps": [
+        "¿Cuándo un genérico sobra?",
+        "¿Qué hace extends en un parámetro de tipo?"
+      ]
+    },
+    {
+      "id": "ts-q007",
+      "level": "junior",
+      "topic": "Configuración",
+      "tags": [
+        "tsconfig",
+        "strict"
+      ],
+      "prompt": "¿Qué hace el modo strict y qué opciones incluye?",
+      "answer": "`\"strict\": true` activa de golpe un grupo de comprobaciones. Las importantes:\n\n- **`strictNullChecks`**: la que más cambia. Sin ella, `null` y `undefined` son asignables a **cualquier** tipo, con lo que el sistema de tipos no sirve de gran cosa. Con ella, hay que declarar `string | null` y comprobarlo.\n- **`noImplicitAny`**: un parámetro sin tipo es un error, en vez de un `any` silencioso.\n- **`strictFunctionTypes`**: comprueba bien la varianza de los parámetros.\n- **`strictPropertyInitialization`**: una propiedad de clase no opcional debe inicializarse.\n- **`useUnknownInCatchVariables`**: la variable de un `catch` es `unknown`, no `any`. Correcto: no sabes qué te lanzaron.\n\nFuera de `strict` pero muy recomendables:\n- **`noUncheckedIndexedAccess`**: `arr[0]` pasa a ser `T | undefined`, que es la verdad. Es incómoda al principio y evita muchísimos crashes.\n- **`exactOptionalPropertyTypes`**: distingue \"la propiedad no está\" de \"está y vale undefined\".\n\nEn un proyecto nuevo, `strict` desde el minuto cero: activarlo después cuesta mucho más. En uno heredado, se activa de forma **incremental**, por carpeta o con `// @ts-expect-error` temporales, porque encenderlo de golpe produce 3.000 errores y el equipo aprende a ignorarlos.",
+      "rubric": {
+        "junior": "Sabe que strict hace las comprobaciones más severas.",
+        "mid": "Nombra strictNullChecks y noImplicitAny y sabe qué aporta cada una.",
+        "senior": "Conoce las opciones fuera de strict que más valen (noUncheckedIndexedAccess), y plantea la activación incremental en bases heredadas para no destruir la señal de los errores."
+      },
+      "followUps": [
+        "¿Qué hace noUncheckedIndexedAccess?",
+        "¿Cómo activarías strict en un proyecto grande sin strict?"
+      ]
+    },
+    {
+      "id": "ts-q008",
+      "level": "junior",
+      "topic": "Tipos",
+      "tags": [
+        "utility types"
+      ],
+      "prompt": "¿Qué utility types usas más y para qué?",
+      "answer": "- **`Partial<T>`**: todas las propiedades opcionales. Para actualizaciones parciales.\n- **`Required<T>`**: lo contrario.\n- **`Readonly<T>`**: solo lectura (superficial, ojo).\n- **`Pick<T, K>`** y **`Omit<T, K>`**: quedarse con unas propiedades o quitarlas. `Omit` es el más usado: `Omit<Usuario, 'password'>`.\n- **`Record<K, V>`**: un objeto con claves K y valores V. `Record<string, number>`.\n- **`ReturnType<F>`** y **`Parameters<F>`**: extraer de una función. Útiles para tipar a partir de algo que ya existe.\n- **`Awaited<T>`**: desenvuelve una promesa, incluso anidada.\n- **`NonNullable<T>`**: quita null y undefined.\n\nEl valor real no es ahorrar tecleo: es que el tipo derivado **se actualiza solo**. Si añades un campo a `Usuario`, `Omit<Usuario, 'password'>` lo incluye automáticamente. Un tipo copiado a mano se desincroniza en la primera semana.\n\nUn aviso sobre `Omit`: **no comprueba que la clave exista**. `Omit<Usuario, 'passwrod'>` compila sin quejarse y no quita nada. `Pick` sí valida las claves.",
+      "rubric": {
+        "junior": "Conoce Partial, Pick y Omit y los usa.",
+        "mid": "Usa Record, ReturnType y NonNullable, y valora que los tipos derivados se mantengan solos.",
+        "senior": "Conoce la trampa de Omit con claves inexistentes, sabe que Readonly es superficial, y prefiere derivar tipos de una única fuente de verdad en vez de duplicarlos."
+      },
+      "followUps": [
+        "¿Qué problema tiene Omit con una clave mal escrita?",
+        "¿Readonly protege los objetos anidados?"
+      ]
+    },
+    {
+      "id": "ts-q009",
+      "level": "junior",
+      "topic": "Tipos",
+      "tags": [
+        "literales",
+        "as const"
+      ],
+      "prompt": "¿Qué hace as const y para qué sirve?",
+      "answer": "Una **const assertion** le dice a TypeScript que infiera el tipo **más específico posible** y lo marque como solo lectura.\n\n```ts\nconst a = 'rojo';                  // 'rojo' (literal, porque es const)\nlet b = 'rojo';                    // string (se puede reasignar)\n\nconst colores = ['rojo', 'azul'];              // string[]\nconst colores2 = ['rojo', 'azul'] as const;    // readonly ['rojo', 'azul']\n\nconst config = { modo: 'oscuro' };             // { modo: string }\nconst config2 = { modo: 'oscuro' } as const;   // { readonly modo: 'oscuro' }\n```\n\nEl uso más valioso es **derivar un tipo unión desde un array de valores**, para tener una única fuente de verdad:\n\n```ts\nconst NIVELES = ['junior', 'mid', 'senior'] as const;\ntype Nivel = (typeof NIVELES)[number];   // 'junior' | 'mid' | 'senior'\n```\n\nAhora el array sirve para iterar en runtime **y** el tipo sale de él. Añadir un nivel actualiza los dos a la vez, y no hay forma de que se desincronicen. Escribir el array y la unión por separado garantiza que un día divergirán.\n\nTambién resuelve el problema de pasar un objeto a una función que espera un literal: sin `as const`, `{ metodo: 'GET' }` se infiere como `string` y no encaja en `'GET' | 'POST'`.",
+      "rubric": {
+        "junior": "Sabe que fija tipos literales y hace el valor readonly.",
+        "mid": "Deriva uniones desde arrays con typeof ... [number].",
+        "senior": "Defiende la fuente única de verdad entre el valor en runtime y el tipo, y conoce el caso del objeto pasado a una función que espera literales."
+      },
+      "followUps": [
+        "¿Cómo derivas un tipo unión de un array?",
+        "¿Por qué const config = { m: 'GET' } no encaja en 'GET' | 'POST'?"
+      ]
+    },
+    {
+      "id": "ts-q010",
+      "level": "junior",
+      "topic": "Fundamentos",
+      "tags": [
+        "enum"
+      ],
+      "prompt": "¿Usarías enum en TypeScript?",
+      "answer": "Probablemente no, y conviene saber por qué.\n\nProblemas de `enum`:\n\n1. **Genera código en runtime.** Es de las poquísimas cosas de TypeScript que no se borran al compilar: produce un objeto real. Rompe la regla mental de \"los tipos desaparecen\" y añade peso.\n2. **No es compatible con `isolatedModules`** ni con transpiladores que compilan fichero a fichero (esbuild, SWC, Babel), al menos los `const enum`. Eso afecta a Vite y a la mayoría de setups modernos.\n3. **Los enums numéricos aceptan cualquier número.** `const x: MiEnum = 999` compila. El tipado es más débil de lo que parece.\n4. **No son estructurales**: dos enums con los mismos valores no son intercambiables, lo que choca con el resto del sistema de tipos de TypeScript.\n\nLa alternativa idiomática es un objeto `as const` más un tipo derivado:\n\n```ts\nconst Estado = { Activo: 'activo', Pausado: 'pausado' } as const;\ntype Estado = (typeof Estado)[keyof typeof Estado];\n```\n\nO simplemente una unión de literales, `type Estado = 'activo' | 'pausado'`, si no necesitas el objeto para iterar.\n\nCuándo un `enum` sigue teniendo sentido: si necesitas el objeto en runtime y ya está extendido por toda la base de código, migrar no compensa. Es una preferencia razonada, no una prohibición.",
+      "rubric": {
+        "junior": "Sabe usar enum y su sintaxis.",
+        "mid": "Conoce que genera código en runtime y prefiere uniones de literales.",
+        "senior": "Explica la incompatibilidad con isolatedModules y los transpiladores modernos, el tipado débil de los enums numéricos, y matiza cuándo no compensa migrar."
+      },
+      "followUps": [
+        "¿Por qué const enum da problemas con Vite?",
+        "¿Qué alternativa propondrías?"
+      ]
+    },
+    {
+      "id": "ts-q011",
+      "level": "junior",
+      "topic": "Tipos",
+      "tags": [
+        "funciones"
+      ],
+      "prompt": "¿Cómo se tipan las funciones y los callbacks?",
+      "answer": "```ts\n// Declaración\nfunction suma(a: number, b: number): number { return a + b; }\n\n// Tipo de función\ntype Comparador = (a: number, b: number) => number;\ntype Handler = (evento: MouseEvent) => void;\n\n// Opcionales, por defecto y rest\nfunction f(a: string, b?: number, c = 0, ...resto: string[]) { }\n\n// Sobrecargas: la misma función con firmas distintas\nfunction parsear(x: string): object;\nfunction parsear(x: object): string;\nfunction parsear(x: string | object): object | string { /* ... */ }\n```\n\nDos detalles que sorprenden:\n\n**Un callback que devuelve algo encaja donde se espera `void`.** `type H = () => void` acepta `() => 42`. Es deliberado: permite pasar `array.push` a un `forEach` sin errores. El valor simplemente se ignora.\n\n**El tipo de retorno normalmente no se anota**: TypeScript lo infiere y así no puede desincronizarse. La excepción son las **APIs públicas**, donde anotarlo es una forma de fijar el contrato y de que un cambio accidental en el cuerpo falle aquí y no en el consumidor.\n\nY en los parámetros ocurre lo contrario: siempre se anotan, porque TypeScript no puede inferirlos (salvo en callbacks en línea, donde sí los infiere del contexto).",
+      "rubric": {
+        "junior": "Tipa parámetros y retorno y usa parámetros opcionales.",
+        "mid": "Conoce las sobrecargas y la inferencia contextual en callbacks.",
+        "senior": "Explica por qué un retorno se asigna a void, decide cuándo anotar el retorno según si es API pública, y prefiere uniones a sobrecargas cuando las firmas no son realmente distintas."
+      },
+      "followUps": [
+        "¿Por qué () => 42 encaja en () => void?",
+        "¿Cuándo anotas el tipo de retorno?"
+      ]
+    },
+    {
+      "id": "ts-q012",
+      "level": "junior",
+      "topic": "Fundamentos",
+      "tags": [
+        "estructural"
+      ],
+      "prompt": "¿Qué significa que TypeScript tenga tipado estructural?",
+      "answer": "Que la compatibilidad se decide por la **forma** del tipo, no por su nombre. Si un objeto tiene las propiedades que hacen falta, encaja, aunque nunca haya oído hablar de la interfaz.\n\n```ts\ninterface Punto { x: number; y: number }\n\nconst p = { x: 1, y: 2, z: 3 };\nconst q: Punto = p;   // compila: tiene x e y\n```\n\nEs lo contrario del tipado **nominal** de Java o C#, donde haría falta declarar `implements Punto`.\n\nLa ventaja es la flexibilidad: no necesitas que el autor de un tipo haya previsto tu caso.\n\nEl inconveniente es que **tipos con la misma forma son intercambiables aunque signifiquen cosas distintas**. `type UserId = string` y `type Email = string` son el mismo tipo: nada impide pasar uno donde va el otro. Es el problema de la *primitive obsession*, y causa bugs reales al intercambiar argumentos.\n\nLa solución habitual son los **branded types**: añadir una marca de tipo que no existe en runtime.\n\n```ts\ntype UserId = string & { readonly __brand: 'UserId' };\n```\n\nY una excepción a la regla estructural que confunde: al asignar un **literal directamente**, TypeScript aplica *excess property checking* y sí se queja de propiedades de más. Solo con literales; a través de una variable intermedia, no.",
+      "rubric": {
+        "junior": "Explica que basta con tener la forma correcta.",
+        "mid": "Compara con el tipado nominal y conoce el excess property checking de los literales.",
+        "senior": "Identifica la primitive obsession como consecuencia, propone branded types, y explica por qué el chequeo de propiedades extra solo aplica a literales."
+      },
+      "followUps": [
+        "¿Cómo distinguirías un UserId de un Email?",
+        "¿Por qué un literal se queja de propiedades de más y una variable no?"
+      ]
+    },
+    {
+      "id": "ts-q013",
+      "level": "junior",
+      "topic": "Fundamentos",
+      "tags": [
+        "as",
+        "casting"
+      ],
+      "prompt": "¿Qué hace el operador as y cuándo es peligroso?",
+      "answer": "`as` es una **type assertion**: le dices al compilador \"confía en mí, esto es de este tipo\". No convierte nada y **no comprueba nada en runtime**. Es puro borrado.\n\n```ts\nconst datos = await res.json() as Usuario;   // ¿y si no lo es?\n```\n\nEs peligroso porque **traslada el error a un punto lejano**. Si la API devuelve otra cosa, el fallo no aparece aquí sino tres capas más abajo, con un mensaje que no menciona el origen.\n\nCasos donde es legítimo:\n- Cuando **sabes algo que el compilador no puede demostrar**, y es local y verificable de un vistazo.\n- `as const`, que es otra cosa: no miente, refina.\n- En tests, para construir objetos parciales.\n\nAlternativas por orden de preferencia:\n1. **Estrechar** con `typeof`, `in` o una unión discriminada.\n2. **Validar en runtime** con Zod: obtienes el tipo *y* la comprobación.\n3. Un **type predicate**, sabiendo que también es una promesa sin verificar.\n\nY el que nunca tiene excusa: `as unknown as T`, la doble aserción para forzar tipos incompatibles. Compila cualquier cosa y desactiva por completo el sistema de tipos. Cuando aparece en una revisión, casi siempre señala un modelo de datos equivocado.",
+      "rubric": {
+        "junior": "Sabe que fuerza un tipo y que no convierte el valor.",
+        "mid": "Prefiere estrechar o validar, y reconoce que as traslada el error a runtime.",
+        "senior": "Distingue los usos legítimos, señala `as unknown as` como síntoma de modelado erróneo, y propone validación en la frontera para eliminar la necesidad de aserciones."
+      },
+      "followUps": [
+        "¿Qué alternativa hay a `as` al parsear una respuesta?",
+        "¿Por qué `as unknown as T` es una señal de alarma?"
+      ]
+    },
+    {
+      "id": "ts-q014",
+      "level": "junior",
+      "topic": "Herramientas",
+      "tags": [
+        "errores",
+        "tsc"
+      ],
+      "prompt": "¿Cómo abordas un error de TypeScript que no entiendes?",
+      "answer": "Método, porque los mensajes de TypeScript pueden ser largos:\n\n1. **Lee de abajo arriba.** La causa raíz suele estar en la última línea del error, no en la primera. Lo de arriba es el contexto general (\"Type X is not assignable to Y\"); lo de abajo es el detalle concreto (\"Property 'id' is missing\").\n2. **Busca el número de error** (`TS2339`). Suele dar mejores resultados que pegar el mensaje entero.\n3. **Divide.** Extrae la expresión a una variable con tipo anotado. El error se mueve al punto exacto donde falla.\n4. **Pregúntale al compilador.** Pasa el ratón sobre las variables en el editor para ver qué tipo infirió de verdad; muchas veces la sorpresa está ahí.\n5. Para genéricos complicados, un alias intermedio o un `type Debug = ...` hace visible lo que TypeScript está calculando.\n\nLo que **no** hay que hacer: silenciarlo con `any`, `as` o `@ts-ignore` sin entenderlo. El error suele ser correcto y estar señalando un bug real; taparlo lo traslada a runtime.\n\nSi realmente hay que silenciar algo, **`@ts-expect-error` es mejor que `@ts-ignore`**: si el error desaparece (porque alguien arregló el tipo), el comentario pasa a ser un error y te obliga a quitarlo. `@ts-ignore` se queda ahí para siempre ocultando problemas nuevos.",
+      "rubric": {
+        "junior": "Busca el mensaje y prueba soluciones.",
+        "mid": "Lee el error de abajo arriba, divide la expresión y consulta los tipos inferidos.",
+        "senior": "Trata el error como información válida y no como obstáculo, prefiere @ts-expect-error a @ts-ignore por su caducidad automática, y sabe depurar inferencias complejas con alias intermedios."
+      },
+      "followUps": [
+        "¿Qué diferencia hay entre @ts-ignore y @ts-expect-error?",
+        "¿Cómo ves qué tipo infirió TypeScript?"
+      ]
+    },
+    {
+      "id": "ts-q015",
+      "level": "junior",
+      "topic": "Configuración",
+      "tags": [
+        "tsconfig",
+        "build"
+      ],
+      "prompt": "¿Qué opciones de tsconfig.json importan de verdad?",
+      "answer": "- **`strict`**: la más importante. Ver la pregunta específica.\n- **`target`**: a qué versión de ECMAScript se compila. Bajarlo de más añade polyfills y código transpilado innecesario; hoy `ES2022` es razonable.\n- **`module`** y **`moduleResolution`**: cómo se resuelven los imports. `\"bundler\"` es lo correcto cuando hay un bundler; `\"NodeNext\"` para Node puro. Aquí es donde se atasca casi todo el mundo.\n- **`lib`**: qué APIs existen (`DOM`, `ES2022`). Si tu código de servidor declara `DOM`, podrás usar `window` sin error y reventar en producción.\n- **`paths`**: alias de import (`@/components`). Requiere que el bundler los conozca también.\n- **`noEmit`**: TypeScript solo comprueba y el bundler transpila. Es el montaje habitual hoy.\n- **`skipLibCheck`**: no comprobar los `.d.ts` de las dependencias. Casi todo el mundo lo pone a `true`, porque los tipos de terceros suelen tener errores que no puedes arreglar y que ralentizan el build.\n- **`isolatedModules`**: obliga a que cada fichero se pueda transpilar por separado. Necesario con esbuild o SWC, y es lo que rompe los `const enum`.\n- **`incremental`** y project references, para acelerar builds grandes.\n\nY la trampa que cuesta horas: **el `tsconfig` de tu editor y el que usa el build tienen que ser el mismo**. Si no, ves errores que CI no ve, o al revés.",
+      "rubric": {
+        "junior": "Conoce strict, target y el propósito del fichero.",
+        "mid": "Entiende moduleResolution, lib, paths y noEmit.",
+        "senior": "Explica el intercambio de skipLibCheck, el papel de isolatedModules con los transpiladores modernos, y vigila la coherencia entre la configuración del editor y la del CI."
+      },
+      "followUps": [
+        "¿Por qué casi todo el mundo activa skipLibCheck?",
+        "¿Qué hace isolatedModules?"
+      ]
+    },
+    {
+      "id": "ts-q016",
+      "level": "junior",
+      "topic": "Tipos",
+      "tags": [
+        "arrays",
+        "tuplas"
+      ],
+      "prompt": "¿Cómo se tipan arrays, tuplas y objetos con claves dinámicas?",
+      "answer": "```ts\nconst a: number[] = [1, 2];\nconst b: Array<number> = [1, 2];          // equivalente\nconst c: readonly number[] = [1, 2];      // no se puede mutar\n\n// Tuplas: longitud y tipo por posición\nconst par: [string, number] = ['a', 1];\nconst conNombre: [x: number, y: number] = [0, 0];   // etiquetas\nconst variadica: [string, ...number[]] = ['a', 1, 2];\n\n// Claves dinámicas\ntype PorId = Record<string, Usuario>;\ntype Indexado = { [clave: string]: Usuario };        // equivalente\n```\n\nEl problema que casi nadie tiene en cuenta: **`Record<string, T>` miente**. `mapa['loQueSea']` se tipa como `T`, no como `T | undefined`, aunque la clave no exista. El acceso a un índice fuera de rango de un array tiene el mismo problema: `arr[999]` se tipa como `T`.\n\nSe arregla con **`noUncheckedIndexedAccess`**, que hace que todo acceso indexado devuelva `T | undefined`. Es la verdad, y obliga a comprobar. Es incómodo al principio y evita muchos crashes de producción.\n\nY las **tuplas se usan menos de lo que deberían**. Un `[valor, setValor]` es más honesto que un objeto de dos claves para un par posicional, y es lo que hace que `useState` se lea bien.",
+      "rubric": {
+        "junior": "Tipa arrays y usa Record para diccionarios.",
+        "mid": "Usa tuplas con etiquetas y readonly, y sabe cuándo elegir cada forma.",
+        "senior": "Conoce el problema de que el acceso indexado no incluya undefined y activa noUncheckedIndexedAccess, entendiendo su coste en ergonomía."
+      },
+      "followUps": [
+        "¿Qué devuelve arr[999] según TypeScript?",
+        "¿Cuándo una tupla es mejor que un objeto?"
+      ]
+    },
+    {
+      "id": "ts-q017",
+      "level": "junior",
+      "topic": "Herramientas",
+      "tags": [
+        "migracion"
+      ],
+      "prompt": "¿Cómo migrarías un proyecto JavaScript a TypeScript?",
+      "answer": "**Incrementalmente. Nunca de golpe.**\n\n1. **Añade TypeScript con la configuración más permisiva**: `allowJs: true`, `strict: false`, `checkJs: false`. El proyecto sigue compilando y funcionando desde el primer día.\n2. **Configura el build y el CI** antes de migrar nada, para que la infraestructura esté probada.\n3. **Empieza por las hojas del grafo de dependencias**: utilidades, constantes, tipos de dominio. Tienen pocas dependencias y muchos dependientes, así que tipar una mejora el autocompletado en muchos sitios.\n4. **Renombra `.js` a `.ts` de uno en uno**, arreglando lo que salga. Un fichero por PR si es grande.\n5. **Activa las opciones estrictas de una en una**, empezando por `noImplicitAny` y luego `strictNullChecks`, que es la que más trabajo da y más valor aporta.\n6. **Añade tipos a las dependencias** (`@types/...`) o escribe declaraciones mínimas para las que no los tengan.\n\nQué **no** hacer:\n- Migrar todo en una rama larga. Se llena de conflictos y nunca se mergea.\n- Poner `any` por todas partes para que compile: tendrás los costes de TypeScript sin los beneficios, y nadie volverá a limpiarlo.\n- Reescribir mientras migras. Renombrar y tipar ya es suficiente riesgo; cambiar la lógica a la vez hace imposible saber qué rompió qué.\n\nY un atajo útil: `// @ts-check` en un fichero `.js` da comprobación de tipos con JSDoc, sin renombrar nada. Buena forma de que el equipo pruebe el sabor antes de comprometerse.",
+      "rubric": {
+        "junior": "Propone renombrar los ficheros y añadir tipos.",
+        "mid": "Plantea migración incremental con allowJs y activación progresiva de strict.",
+        "senior": "Ordena por el grafo de dependencias, evita la rama larga y la reescritura simultánea, y conoce @ts-check con JSDoc como paso intermedio de bajo compromiso."
+      },
+      "followUps": [
+        "¿Por dónde empiezas: hojas o raíces del grafo?",
+        "¿Qué aporta // @ts-check en un fichero .js?"
+      ]
+    },
+    {
+      "id": "ts-q018",
+      "level": "mid",
+      "topic": "Tipos avanzados",
+      "tags": [
+        "conditional types"
+      ],
+      "prompt": "¿Qué son los conditional types y el operador infer?",
+      "answer": "Un tipo que se decide según una condición sobre otro tipo: `T extends U ? X : Y`.\n\n```ts\ntype EsArray<T> = T extends unknown[] ? true : false;\ntype A = EsArray<string[]>;   // true\n```\n\n**`infer`** declara una variable de tipo dentro de la condición y captura una parte de la estructura:\n\n```ts\ntype Elemento<T> = T extends (infer E)[] ? E : never;\ntype R = Elemento<string[]>;        // string\n\ntype Retorno<F> = F extends (...args: never[]) => infer R ? R : never;\ntype Desenvuelto<T> = T extends Promise<infer V> ? V : T;\n```\n\nAsí están implementados `ReturnType`, `Parameters` y `Awaited` en la librería estándar.\n\nEl comportamiento que hay que conocer es la **distributividad**: cuando el tipo comprobado es un parámetro genérico desnudo y recibe una unión, la condición se aplica **a cada miembro por separado** y se vuelve a unir.\n\n```ts\ntype SinNulo<T> = T extends null | undefined ? never : T;\ntype X = SinNulo<string | null>;   // string, no string | null\n```\n\nSe desactiva envolviendo en tuplas: `[T] extends [U] ? ... : ...`. Es el truco que hace falta cuando quieres tratar la unión como un todo.\n\nY el aviso de criterio: los conditional types anidados son **muy** difíciles de leer y de depurar. Si nadie del equipo va a entender el tipo dentro de seis meses, dos sobrecargas explícitas suelen ser mejor ingeniería.",
+      "rubric": {
+        "junior": "Reconoce la sintaxis T extends U ? X : Y.",
+        "mid": "Usa infer para extraer tipos y conoce ReturnType y Awaited.",
+        "senior": "Explica la distributividad sobre uniones y cómo desactivarla, y aplica criterio: legibilidad frente a ingenio en tipos que mantendrá un equipo."
+      },
+      "followUps": [
+        "¿Qué es un conditional type distributivo?",
+        "¿Cómo evitas que se distribuya?"
+      ]
+    },
+    {
+      "id": "ts-q019",
+      "level": "mid",
+      "topic": "Tipos avanzados",
+      "tags": [
+        "mapped types"
+      ],
+      "prompt": "¿Qué son los mapped types?",
+      "answer": "Tipos que se construyen recorriendo las claves de otro:\n\n```ts\ntype MiPartial<T> = { [K in keyof T]?: T[K] };\ntype MiReadonly<T> = { readonly [K in keyof T]: T[K] };\n\n// Quitar modificadores con el prefijo -\ntype Mutable<T> = { -readonly [K in keyof T]: T[K] };\ntype Concreto<T> = { [K in keyof T]-?: T[K] };\n```\n\nCon **`as`** se pueden remapear las claves, incluidas plantillas de string:\n\n```ts\ntype Getters<T> = {\n  [K in keyof T as `get${Capitalize<string & K>}`]: () => T[K];\n};\n// { nombre: string } → { getNombre: () => string }\n\n// Filtrar claves: devolver never las elimina\ntype SoloFunciones<T> = {\n  [K in keyof T as T[K] extends Function ? K : never]: T[K];\n};\n```\n\nPara qué sirven de verdad: **derivar tipos de una única fuente de verdad**. Un formulario cuyos campos salen del modelo de dominio, un objeto de errores con las mismas claves, un cliente de API generado desde el esquema. Si el modelo cambia, todo lo derivado cambia con él y lo que ya no encaja deja de compilar.\n\nEl coste: los errores se vuelven difíciles de leer, porque TypeScript expande la estructura en vez de mostrar el nombre. Y en tipos grandes afectan al tiempo de compilación.",
+      "rubric": {
+        "junior": "Reconoce la sintaxis [K in keyof T].",
+        "mid": "Escribe mapped types propios y usa los modificadores + y -.",
+        "senior": "Usa remapeo de claves con as y filtrado con never, y sopesa el coste en legibilidad de errores y en tiempo de compilación."
+      },
+      "followUps": [
+        "¿Cómo eliminas claves en un mapped type?",
+        "¿Qué coste tienen en tiempo de compilación?"
+      ]
+    },
+    {
+      "id": "ts-q020",
+      "level": "mid",
+      "topic": "Tipos avanzados",
+      "tags": [
+        "template literal types"
+      ],
+      "prompt": "¿Qué son los template literal types y para qué sirven?",
+      "answer": "Tipos construidos a partir de plantillas de string, con las mismas reglas que las plantillas de JavaScript pero a nivel de tipo:\n\n```ts\ntype Evento = `on${Capitalize<'click' | 'focus'>}`;\n// 'onClick' | 'onFocus'\n\ntype Ruta = `/${string}`;\ntype Metodo = 'GET' | 'POST';\ntype Endpoint = `${Metodo} ${Ruta}`;   // 'GET /...' | 'POST /...'\n```\n\nCombinados con `infer` permiten **parsear strings en tiempo de compilación**:\n\n```ts\ntype Params<R extends string> =\n  R extends `${string}:${infer P}/${infer Resto}`\n    ? P | Params<`/${Resto}`>\n    : R extends `${string}:${infer P}`\n      ? P\n      : never;\n\ntype P = Params<'/users/:id/posts/:postId'>;   // 'id' | 'postId'\n```\n\nEso es lo que hace que un router moderno pueda darte los parámetros tipados a partir de la cadena de la ruta, sin que declares nada.\n\nUsos realistas: nombres de eventos, claves de traducción, rutas con parámetros, nombres de columnas de SQL, clases de utilidad de CSS.\n\nY el límite honesto: las uniones de plantillas **crecen de forma combinatoria**. Dos uniones de 50 elementos generan 2.500 tipos, y TypeScript tiene un tope (en torno a 100.000) antes de rendirse. Es una de las causas más frecuentes de que el editor se vuelva lento en un proyecto grande.",
+      "rubric": {
+        "junior": "Conoce la sintaxis y hace concatenaciones simples.",
+        "mid": "Los combina con uniones y con Capitalize o Uppercase para generar nombres.",
+        "senior": "Los usa con infer para parsear en tiempo de compilación, y conoce la explosión combinatoria y su impacto real en el rendimiento del editor."
+      },
+      "followUps": [
+        "¿Cómo extraerías los parámetros de una ruta?",
+        "¿Por qué pueden ralentizar el editor?"
+      ]
+    },
+    {
+      "id": "ts-q021",
+      "level": "mid",
+      "topic": "Validación",
+      "tags": [
+        "zod",
+        "runtime"
+      ],
+      "prompt": "¿Por qué necesitas validación en runtime si ya tienes tipos?",
+      "answer": "Porque **los tipos no existen en tiempo de ejecución**. Cuando escribes:\n\n```ts\nconst usuario = await res.json() as Usuario;\n```\n\nno has comprobado nada. Le has dicho al compilador que confíe. Si la API cambió un campo, desplegó otra versión, o hay un proxy por medio, tienes un objeto que **no** es un `Usuario` y TypeScript cree que sí. El error aparecerá tres capas más abajo, con un mensaje que no menciona el origen.\n\nLa solución es validar en la **frontera** y derivar el tipo del esquema, no al revés:\n\n```ts\nimport { z } from 'zod';\n\nconst Usuario = z.object({\n  id: z.string().uuid(),\n  email: z.string().email(),\n  edad: z.number().int().positive().optional(),\n});\n\ntype Usuario = z.infer<typeof Usuario>;   // el tipo sale del esquema\n\nconst datos = Usuario.parse(await res.json());  // lanza si no encaja\nconst r = Usuario.safeParse(x);                 // o devuelve un resultado\n```\n\nLa clave es `z.infer`: **una sola fuente de verdad**. No hay forma de que el esquema y el tipo se desincronicen, que es justo lo que pasa cuando los escribes por separado.\n\nDónde validar: respuestas de API, `localStorage`, parámetros de URL, variables de entorno, formularios, mensajes de webhooks. Todo lo que cruce la frontera del programa.\n\nDónde **no**: entre funciones internas. Ahí los tipos ya garantizan la coherencia y validar solo añade coste.",
+      "rubric": {
+        "junior": "Sabe que hay que comprobar los datos de la API.",
+        "mid": "Usa Zod y deriva el tipo del esquema con z.infer.",
+        "senior": "Define la frontera con precisión (qué validar y qué no), conoce el coste de validar datos grandes, y trata el esquema como el contrato compartido entre tipos y runtime."
+      },
+      "followUps": [
+        "¿Qué validarías y qué no?",
+        "¿Qué coste tiene validar una respuesta grande?"
+      ]
+    },
+    {
+      "id": "ts-q022",
+      "level": "mid",
+      "topic": "Tipos",
+      "tags": [
+        "keyof",
+        "indexado"
+      ],
+      "prompt": "¿Qué hacen keyof, typeof y los tipos indexados?",
+      "answer": "- **`keyof T`**: la unión de las claves de `T`. `keyof {a: 1, b: 2}` es `'a' | 'b'`.\n- **`typeof valor`** (en posición de tipo): el tipo de un valor existente. Permite derivar tipos de constantes en vez de duplicarlos.\n- **`T[K]`**: el tipo de una propiedad. `Usuario['id']`. Con una unión de claves devuelve la unión de tipos, y `T[keyof T]` da la unión de todos los valores.\n\nJuntos permiten la función de acceso tipado, que es el ejemplo canónico:\n\n```ts\nfunction get<T, K extends keyof T>(obj: T, clave: K): T[K] {\n  return obj[clave];\n}\n\nconst u = { id: '1', edad: 30 };\nget(u, 'id');      // string\nget(u, 'edad');    // number\nget(u, 'otra');    // error de compilación\n```\n\nSin genéricos esto devolvería `any` o la unión de todos los tipos; con ellos, el tipo exacto de la clave que pediste.\n\nY el patrón de fuente única de verdad, que es lo que más vale:\n\n```ts\nconst RUTAS = { home: '/', perfil: '/perfil' } as const;\ntype Ruta = (typeof RUTAS)[keyof typeof RUTAS];   // '/' | '/perfil'\ntype NombreRuta = keyof typeof RUTAS;              // 'home' | 'perfil'\n```\n\nEl objeto existe en runtime para navegar, y los tipos salen de él. Añadir una ruta actualiza ambos, y no hay forma de que diverjan.",
+      "rubric": {
+        "junior": "Conoce keyof y el acceso indexado.",
+        "mid": "Combina keyof con genéricos para acceso tipado y usa typeof sobre constantes.",
+        "senior": "Aplica el patrón de derivar tipos de valores como fuente única de verdad, y conoce T[keyof T] para obtener la unión de valores."
+      },
+      "followUps": [
+        "¿Qué devuelve T[keyof T]?",
+        "¿Cómo tipas una función que accede a una propiedad por nombre?"
+      ]
+    },
+    {
+      "id": "ts-q023",
+      "level": "mid",
+      "topic": "Fundamentos",
+      "tags": [
+        "varianza"
+      ],
+      "prompt": "¿Qué es la varianza y por qué TypeScript la trata de forma peculiar con los métodos?",
+      "answer": "La varianza describe cómo se relaciona la subtipación de un contenedor con la de su contenido.\n\n- **Covariante**: si `Perro` es subtipo de `Animal`, `Perro[]` lo es de `Animal[]`. Seguro para **leer**.\n- **Contravariante**: para los **parámetros** de una función. `(a: Animal) => void` es asignable donde se espera `(a: Perro) => void`, porque una función que acepta cualquier animal sirve donde se esperaba una que acepta perros. Al revés no.\n\nLa peculiaridad de TypeScript: **los parámetros de método se comprueban de forma bivariante**, no contravariante. Es decir, se aceptan en las dos direcciones, lo cual es **insólido**:\n\n```ts\ninterface Animal { nombre: string }\ninterface Perro extends Animal { raza: string }\n\ninterface Handler {\n  manejar(a: Animal): void;         // método: bivariante\n  manejar2: (a: Animal) => void;    // propiedad: contravariante con strictFunctionTypes\n}\n\nconst h: Handler = {\n  manejar: (p: Perro) => p.raza.length,   // compila... y puede reventar\n  // manejar2: (p: Perro) => {}           // error, correctamente\n};\n```\n\nPor qué se hizo así: por compatibilidad con código existente, sobre todo con el DOM y con patrones de arrays muy extendidos. Es una concesión deliberada de solidez a cambio de ergonomía, igual que la covarianza de arrays.\n\nLa consecuencia práctica: **declarar los callbacks como propiedades de función y no como métodos** te da la comprobación correcta cuando `strictFunctionTypes` está activo.",
+      "rubric": {
+        "junior": "Ha oído hablar de covarianza y contravarianza.",
+        "mid": "Sabe que los parámetros de función son contravariantes y que los arrays son covariantes.",
+        "senior": "Conoce la bivarianza de los métodos y su motivo histórico, sabe que strictFunctionTypes no la afecta, y aplica la regla práctica de declarar callbacks como propiedades."
+      },
+      "followUps": [
+        "¿Por qué strictFunctionTypes no afecta a los métodos?",
+        "¿Por qué los arrays son covariantes si es inseguro?"
+      ]
+    },
+    {
+      "id": "ts-q024",
+      "level": "mid",
+      "topic": "Herramientas",
+      "tags": [
+        "declaraciones",
+        "tipos de terceros"
+      ],
+      "prompt": "¿Cómo tipas una librería que no trae tipos?",
+      "answer": "Por orden de preferencia:\n\n1. **Buscar `@types/...`** en DefinitelyTyped. Es lo primero que hay que comprobar.\n2. **Escribir un `.d.ts` propio** en el proyecto:\n\n```ts\n// tipos/mi-libreria.d.ts\ndeclare module 'mi-libreria' {\n  export function hacer(x: string): number;\n  export default class Cliente {\n    constructor(config: { url: string });\n    enviar(datos: unknown): Promise<void>;\n  }\n}\n```\n\nNo hace falta tipar la librería entera: **tipa solo lo que usas**. Un `.d.ts` de veinte líneas que cubre tus tres funciones vale más que esperar a que alguien tipe las doscientas.\n\n3. **Declaración de escape**, si tienes prisa: `declare module 'mi-libreria';` la deja como `any`. Funciona, pero pierdes todo.\n\nPara **extender** tipos existentes se usa el declaration merging, que es donde `interface` gana a `type`:\n\n```ts\n// Añadir una propiedad al Request de Express\ndeclare global {\n  namespace Express {\n    interface Request { usuario?: Usuario }\n  }\n}\nexport {};   // necesario para que el fichero sea un módulo\n```\n\nY declarar tipos para assets que el bundler resuelve:\n\n```ts\ndeclare module '*.svg' {\n  const contenido: string;\n  export default contenido;\n}\n```\n\nSi escribes tipos buenos para una librería popular, **contribúyelos a DefinitelyTyped**: te ahorra mantenerlos y ayuda a mucha gente.",
+      "rubric": {
+        "junior": "Busca el paquete @types correspondiente.",
+        "mid": "Escribe un .d.ts propio con lo que usa y conoce declare module.",
+        "senior": "Usa declaration merging para extender tipos de terceros, tipa assets del bundler, y propone contribuir a DefinitelyTyped en vez de mantener declaraciones locales indefinidamente."
+      },
+      "followUps": [
+        "¿Cómo añades una propiedad al Request de Express?",
+        "¿Por qué hace falta `export {}` en ese fichero?"
+      ]
+    },
+    {
+      "id": "ts-q025",
+      "level": "mid",
+      "topic": "Tipos",
+      "tags": [
+        "branded types"
+      ],
+      "prompt": "¿Cómo distingues tipos que son el mismo primitivo?",
+      "answer": "El problema: con tipado estructural, `type UserId = string` y `type Email = string` **son el mismo tipo**. Nada impide pasar uno donde va el otro, y intercambiar dos argumentos string compila perfectamente. Es la *primitive obsession*, y causa bugs que ningún test unitario atrapa.\n\nLa solución son los **branded types**: añadir una marca que existe solo en el sistema de tipos.\n\n```ts\ndeclare const marca: unique symbol;\ntype Brand<T, B> = T & { readonly [marca]: B };\n\ntype UserId = Brand<string, 'UserId'>;\ntype Email = Brand<string, 'Email'>;\n\n// Constructores que validan: si tienes un Email, es válido.\nfunction email(valor: string): Email {\n  if (!valor.includes('@')) throw new Error('Email inválido');\n  return valor as Email;   // la única aserción, encapsulada aquí\n}\n\nfunction enviar(a: Email, de: UserId) { }\n// enviar(userId, correo);   // error de compilación\n```\n\nPropiedades importantes:\n- **Coste cero en runtime**: la marca no existe, sigue siendo un string.\n- La única aserción está **encapsulada en el constructor**, que sí valida. A partir de ahí, tener un `Email` garantiza que es válido y nadie tiene que volver a comprobarlo.\n\nUsos típicos: identificadores de distintas entidades, unidades (céntimos frente a euros, metros frente a pies), strings validados, y valores ya escapados o sanitizados frente a los crudos, que es una defensa real contra XSS.\n\nEl coste: hace falta el constructor, y en los bordes se acumulan conversiones. Merece la pena para conceptos que se confunden de verdad, no para cada string del programa.",
+      "rubric": {
+        "junior": "Usa alias de tipo y asume que basta.",
+        "mid": "Conoce los branded types y los implementa con una propiedad marcadora.",
+        "senior": "Encapsula la única aserción en un constructor que valida, de modo que el tipo sea una garantía; y aplica el patrón a unidades y a valores sanitizados, sopesando el coste en los bordes."
+      },
+      "followUps": [
+        "¿Qué coste tienen en runtime?",
+        "¿Cómo usarías esto contra XSS?"
+      ]
+    },
+    {
+      "id": "ts-q026",
+      "level": "mid",
+      "topic": "Herramientas",
+      "tags": [
+        "rendimiento",
+        "compilacion"
+      ],
+      "prompt": "El editor va lento y tsc tarda minutos. ¿Qué haces?",
+      "answer": "Primero **medir**, que en TypeScript hay herramientas específicas y poca gente las usa:\n\n- `tsc --diagnostics` o `--extendedDiagnostics`: cuántos ficheros, cuántos tipos, dónde se va el tiempo.\n- `tsc --generateTrace traza/`: genera una traza que se abre en el visor de Chrome y muestra **qué tipo concreto** está costando. Es la herramienta decisiva.\n- La extensión de VS Code tiene un `TypeScript: Open TS Server log`.\n\nCausas habituales, por frecuencia:\n\n1. **Tipos condicionales o recursivos complejos.** Un tipo que parsea strings o recorre uniones grandes puede costar segundos **por uso**. Suele ser un solo tipo el culpable de todo.\n2. **Explosión combinatoria de uniones**, típicamente por template literal types cruzando dos uniones grandes.\n3. **Inferencia profunda**: cadenas largas de genéricos donde TypeScript tiene que resolver muchos niveles. Anotar el tipo explícitamente en un punto intermedio corta la cadena.\n4. **`skipLibCheck: false`**: comprobar los `.d.ts` de todas las dependencias. Ponerlo a `true` suele ser la mejora más rápida.\n5. **`include` demasiado amplio**: compilar `node_modules` o ficheros de build.\n\nSoluciones estructurales:\n- **Project references** e `incremental: true` para que solo se recompile lo que cambió.\n- Separar el chequeo de tipos del transpilado: el bundler transpila (esbuild o SWC, que ignoran los tipos y van muy rápido) y `tsc --noEmit` comprueba en paralelo o en CI.\n\nY el criterio: un tipo ingenioso que cuesta cinco segundos de compilación en cada guardado le roba al equipo más tiempo del que ahorra.",
+      "rubric": {
+        "junior": "Reinicia el servidor de TypeScript cuando va lento.",
+        "mid": "Activa skipLibCheck, revisa el include y usa incremental.",
+        "senior": "Mide con --generateTrace para localizar el tipo culpable, conoce la explosión combinatoria y la inferencia profunda, y separa chequeo de transpilado. Trata el tiempo de compilación como coste del equipo."
+      },
+      "followUps": [
+        "¿Qué te muestra --generateTrace?",
+        "¿Por qué separar tsc del transpilado?"
+      ]
+    },
+    {
+      "id": "ts-q027",
+      "level": "mid",
+      "topic": "Tipos",
+      "tags": [
+        "errores",
+        "result"
+      ],
+      "prompt": "¿Cómo tipas los errores si el catch es unknown?",
+      "answer": "Con `useUnknownInCatchVariables` (incluido en `strict`), la variable de un `catch` es **`unknown`**, no `any`. Es correcto: en JavaScript se puede lanzar cualquier cosa, incluido un string o un número.\n\nEso obliga a estrechar:\n\n```ts\ntry {\n  await hacer();\n} catch (e) {\n  if (e instanceof ApiError) manejar(e.codigo);\n  else if (e instanceof Error) registrar(e.message, e.stack);\n  else registrar(String(e));     // alguien lanzó un string\n}\n```\n\nClases de error propias con discriminante hacen esto mucho más limpio:\n\n```ts\nclass ApiError extends Error {\n  constructor(readonly codigo: number, mensaje: string) {\n    super(mensaje);\n    this.name = 'ApiError';\n    // Necesario al extender Error compilando a ES5:\n    Object.setPrototypeOf(this, ApiError.prototype);\n  }\n}\n```\n\nEse `setPrototypeOf` es la trampa clásica: con `target: ES5`, `instanceof` deja de funcionar en subclases de `Error` sin él.\n\nPero el enfoque de fondo importa más: **TypeScript no tiene excepciones comprobadas**. `function login(): Promise<User>` no dice que puede fallar ni por qué. Para los errores **esperados del dominio** (credenciales incorrectas, sin red, validación), un tipo `Result` los pone en la firma:\n\n```ts\ntype Result<T, E> = { ok: true; valor: T } | { ok: false; error: E };\n```\n\nAsí el error forma parte del tipo, el `switch` es exhaustivo, y añadir una causa nueva **rompe la compilación** en todos los sitios que hay que actualizar. Excepciones para los bugs; `Result` en los límites entre capas.",
+      "rubric": {
+        "junior": "Usa catch (e) y comprueba con instanceof Error.",
+        "mid": "Sabe que catch es unknown, crea clases de error propias y las estrecha.",
+        "senior": "Argumenta desde la ausencia de excepciones comprobadas, separa errores del dominio de bugs con un tipo Result, y conoce la trampa de setPrototypeOf al extender Error."
+      },
+      "followUps": [
+        "¿Por qué instanceof falla al extender Error en ES5?",
+        "¿Cuándo Result y cuándo una excepción?"
+      ]
+    },
+    {
+      "id": "ts-q028",
+      "level": "mid",
+      "topic": "Testing",
+      "tags": [
+        "testing",
+        "tipos"
+      ],
+      "prompt": "¿Cómo se prueban los tipos y cómo se tipan los tests?",
+      "answer": "Son dos cosas distintas.\n\n**Probar los tipos** (que tu tipo genérico hace lo que promete): existen `expect-type`, `tsd` y `vitest`'s `expectTypeOf`. Las aserciones se comprueban al compilar:\n\n```ts\nexpectTypeOf<Elemento<string[]>>().toEqualTypeOf<string>();\nexpectTypeOf(miFuncion).parameter(0).toBeString();\n\n// @ts-expect-error: no debe aceptar un número\nmiFuncion(42);\n```\n\n`@ts-expect-error` es especialmente útil aquí: verifica que algo **no** compila, y si un día empieza a compilar el test falla. Es la única forma de probar los casos negativos de un tipo.\n\n**Tipar los tests** tiene su propio problema: los mocks. Exigir un objeto completo para probar una función que solo usa dos campos hace los tests ilegibles. Opciones:\n\n- Un helper de factoría con `Partial`: `function unUsuario(p: Partial<Usuario> = {}): Usuario { return { ...base, ...p }; }`. Es lo más limpio: el test declara solo lo relevante y el tipo sigue siendo completo.\n- `vi.mocked()` o `jest.mocked()` para que los mocks conserven los tipos del módulo original.\n- `as unknown as T` en un mock: funciona, pero si el tipo real cambia el test sigue compilando y da falsa seguridad.\n\nY una decisión que se olvida: **los tests deben estar en el mismo `tsconfig` estricto** que el código. Excluirlos del chequeo es tentador y garantiza que se pudran.",
+      "rubric": {
+        "junior": "Escribe tests en TypeScript y tipa los mocks a mano.",
+        "mid": "Usa factorías con Partial y las utilidades tipadas de mock del framework.",
+        "senior": "Prueba los tipos con expectTypeOf y @ts-expect-error para casos negativos, y mantiene los tests bajo la misma configuración estricta que el código de producción."
+      },
+      "followUps": [
+        "¿Cómo pruebas que algo NO compila?",
+        "¿Qué problema tiene un mock con as unknown as?"
+      ]
+    },
+    {
+      "id": "ts-q029",
+      "level": "mid",
+      "topic": "Arquitectura",
+      "tags": [
+        "api",
+        "contratos"
+      ],
+      "prompt": "¿Cómo garantizas que los tipos del frontend coinciden con los del backend?",
+      "answer": "La regla: **los tipos se generan desde una única fuente, nunca se escriben dos veces**. Todo lo que se escribe a mano en los dos lados se desincroniza; es cuestión de semanas.\n\nOpciones, de más a menos acoplamiento:\n\n1. **tRPC**: el cliente **infiere** los tipos directamente del router del servidor. Cero generación, cero desincronización posible. Requiere que ambos lados sean TypeScript y estén en el mismo repositorio o paquete. Es lo mejor cuando se cumple.\n2. **GraphQL con codegen**: el esquema es el contrato y se generan tipos y hooks. Buen equilibrio cuando el backend no es TypeScript.\n3. **OpenAPI con generación** (`openapi-typescript`): el backend publica el esquema y el frontend genera tipos en el build. Es lo habitual con backends en otros lenguajes.\n4. **Un paquete de tipos compartido** en un monorepo: mejor que nada, pero alguien tiene que mantenerlo a mano.\n\nY **aun generando tipos, hay que validar en runtime**. El esquema puede estar desactualizado, puede haber un proxy transformando, o el backend puede tener desplegada otra versión. Un tipo generado te protege de errores de escritura, no de que el servidor mienta.\n\nDos cosas que hacen que esto funcione en la práctica:\n- **La generación va en el build o en CI**, no en un script que alguien ejecuta cuando se acuerda.\n- **Un cambio incompatible debe romper el build del frontend**. Si no rompe, no te has enterado, y te enterarás en producción.\n\nY el versionado: los clientes desplegados y las pestañas abiertas siguen usando la versión anterior, así que los cambios deben ser aditivos por defecto.",
+      "rubric": {
+        "junior": "Copia los tipos del backend a mano.",
+        "mid": "Genera tipos desde OpenAPI o GraphQL e integra la generación en el build.",
+        "senior": "Elige el mecanismo según el stack y el acoplamiento aceptable, mantiene la validación en runtime pese a los tipos generados, y exige que un cambio incompatible rompa el build."
+      },
+      "followUps": [
+        "¿Por qué validar si los tipos están generados?",
+        "¿Cuándo usarías tRPC y cuándo OpenAPI?"
+      ]
+    },
+    {
+      "id": "ts-q030",
+      "level": "mid",
+      "topic": "Tipos",
+      "tags": [
+        "inmutabilidad",
+        "readonly"
+      ],
+      "prompt": "¿Cómo se consigue inmutabilidad en TypeScript?",
+      "answer": "Por capas, y conviene saber qué protege cada una:\n\n**`readonly` en propiedades** impide la reasignación, pero es **superficial**: un objeto anidado sigue siendo mutable.\n\n```ts\ninterface Config { readonly url: string; readonly opciones: { debug: boolean } }\nc.url = 'x';               // error\nc.opciones.debug = true;   // compila: readonly no es profundo\n```\n\n**`readonly T[]`** (o `ReadonlyArray<T>`) quita los métodos mutadores. Es especialmente útil en **parámetros**: `function f(items: readonly string[])` documenta que no vas a mutar el array del llamador, y el compilador lo garantiza.\n\n**`as const`** hace todo readonly en profundidad, pero solo para literales.\n\n**`Readonly<T>`** es superficial. Para profundo hay que escribirlo:\n\n```ts\ntype DeepReadonly<T> = {\n  readonly [K in keyof T]: T[K] extends object ? DeepReadonly<T[K]> : T[K];\n};\n```\n\nY el límite fundamental: **nada de esto existe en runtime**. `readonly` se borra al compilar. Si el objeto cruza una frontera sin tipos (una librería de JavaScript, `JSON.parse`, un mensaje de un worker), no hay ninguna protección. Para inmutabilidad real en runtime hace falta `Object.freeze` (también superficial) o estructuras persistentes.\n\nEn la práctica, para estado que se actualiza mucho, **Immer** es la respuesta habitual: escribes código aparentemente mutable y produce una copia inmutable, con *structural sharing* para no copiar lo que no cambió.",
+      "rubric": {
+        "junior": "Usa readonly en propiedades.",
+        "mid": "Sabe que readonly es superficial y usa readonly arrays en parámetros.",
+        "senior": "Distingue la garantía en compilación de la de runtime, conoce Object.freeze y el structural sharing de Immer, y usa readonly en firmas como documentación verificable."
+      },
+      "followUps": [
+        "¿readonly existe en runtime?",
+        "¿Qué aporta Immer frente a copiar con spread?"
+      ]
+    },
+    {
+      "id": "ts-q031",
+      "level": "mid",
+      "topic": "Arquitectura",
+      "tags": [
+        "organizacion"
+      ],
+      "prompt": "¿Dónde pones los tipos en un proyecto mediano?",
+      "answer": "El antipatrón más extendido es un fichero `types.ts` gigante con todo dentro. Crece sin límite, todo el mundo lo toca (conflictos constantes de merge), y acopla módulos que no tienen nada que ver.\n\nLa regla: **el tipo vive junto a lo que lo usa**.\n\n- **Tipos de un módulo**: en el propio fichero, exportados si hacen falta fuera. Un componente exporta sus props ahí mismo.\n- **Tipos de dominio compartidos** (`Usuario`, `Pedido`): en la capa de dominio, que no depende de nada.\n- **Tipos derivados de otra fuente** (API, base de datos, esquemas de validación): **generados**, en una carpeta marcada como tal y en `.gitignore` o claramente señalada como no editable a mano.\n- **Declaraciones globales** (`.d.ts` para assets, extensiones de librerías): una carpeta `types/` en la raíz, que es de lo poco que sí es global.\n\nDos criterios que resuelven la mayoría de las dudas:\n\n1. **Deriva en vez de duplicar.** Si un tipo se puede obtener de otro con `Pick`, `Omit` o `z.infer`, hazlo. Un tipo copiado se desincroniza; uno derivado no puede.\n2. **Exporta el tipo desde donde vive el concepto.** Si `Usuario` vive en el dominio, todo el mundo lo importa de ahí. Tener tres definiciones de `Usuario` ligeramente distintas en tres capas es de los problemas más caros de deshacer.\n\nY en un monorepo, los tipos compartidos van en un paquete propio, para que la dependencia sea explícita y el compilador la verifique.",
+      "rubric": {
+        "junior": "Pone los tipos en un fichero types.ts.",
+        "mid": "Coloca los tipos junto a su módulo y comparte solo los de dominio.",
+        "senior": "Prefiere derivar a duplicar, separa los tipos generados de los escritos a mano, y evita definiciones divergentes del mismo concepto entre capas."
+      },
+      "followUps": [
+        "¿Qué problema tiene un types.ts global?",
+        "¿Dónde pondrías los tipos generados de la API?"
+      ]
+    },
+    {
+      "id": "ts-q032",
+      "level": "mid",
+      "topic": "Tipos avanzados",
+      "tags": [
+        "satisfies"
+      ],
+      "prompt": "¿Qué hace el operador satisfies y en qué se diferencia de una anotación de tipo?",
+      "answer": "`satisfies` comprueba que un valor **cumple** un tipo, pero **conserva la inferencia más específica**. Una anotación, en cambio, ensancha el valor al tipo declarado.\n\n```ts\ntype Config = Record<string, string | number>;\n\n// Con anotación: pierdes las claves concretas\nconst a: Config = { host: 'localhost', puerto: 8080 };\na.host;        // string | number  ← ya no sabe que host es string\na.loQueSea;    // no da error: Config admite cualquier clave\n\n// Con satisfies: valida Y conserva\nconst b = { host: 'localhost', puerto: 8080 } satisfies Config;\nb.host;        // string\nb.puerto;      // number\n// b.loQueSea;  // error: la clave no existe\n```\n\nLo mejor de ambos: el compilador **comprueba** que encaja en `Config` (si pones un booleano, falla) y a la vez **recuerda** la forma exacta.\n\nDos usos donde brilla:\n\n```ts\n// 1. Un mapa de rutas: validado y con las claves concretas\nconst rutas = { home: '/', perfil: '/perfil' } satisfies Record<string, `/${string}`>;\ntype NombreRuta = keyof typeof rutas;   // 'home' | 'perfil', no string\n\n// 2. Paletas, configuraciones, tablas de traducción\nconst colores = { primario: '#fff', error: '#f00' } satisfies Record<string, string>;\n```\n\nAntes de `satisfies` había que elegir entre validar (anotando y perdiendo precisión) o conservar la precisión (sin anotar y sin validar). Era una de las asimetrías más molestas del lenguaje.",
+      "rubric": {
+        "junior": "No lo conoce o lo confunde con una anotación.",
+        "mid": "Sabe que valida sin ensanchar y da un ejemplo.",
+        "senior": "Explica qué problema resolvía (elegir entre validación y precisión), y lo aplica a configuraciones y mapas donde se necesitan las claves concretas para derivar tipos."
+      },
+      "followUps": [
+        "¿Por qué una anotación pierde las claves concretas?",
+        "¿Dónde lo usarías en un proyecto real?"
+      ]
+    },
+    {
+      "id": "ts-q033",
+      "level": "mid",
+      "topic": "Herramientas",
+      "tags": [
+        "lint",
+        "calidad"
+      ],
+      "prompt": "¿Qué reglas de lint específicas de TypeScript activarías?",
+      "answer": "Más allá del preset recomendado, las que de verdad cambian la calidad son las de **type-checked**, que requieren información de tipos (y por eso son más lentas, pero mucho más potentes):\n\n- **`no-floating-promises`**: detecta una promesa a la que nadie hizo `await` ni `.catch()`. Es la regla que más bugs reales atrapa en código asíncrono: errores que desaparecen en silencio y operaciones que no se esperan.\n- **`no-misused-promises`**: pasar una función `async` donde se espera algo que devuelve `void`, típicamente un handler de evento o un `if`.\n- **`await-thenable`**: `await` sobre algo que no es una promesa, señal de un malentendido.\n- **`no-unnecessary-condition`**: comprobar si algo es nulo cuando el tipo dice que nunca lo es. Suele revelar que el tipo está mal o que la comprobación sobra.\n- **`strict-boolean-expressions`**: prohíbe usar valores no booleanos en condiciones. Severa, pero elimina la clase de bugs de `if (contador)` con contador a cero.\n- **`no-explicit-any`** y **`no-unsafe-*`**: impiden que `any` se filtre y contamine.\n- **`consistent-type-imports`**: `import type` para lo que solo se usa como tipo. Importa más de lo que parece con transpiladores fichero a fichero.\n\nY sobre el proceso: activarlas **de forma incremental**. Encender el preset estricto de golpe en una base existente produce miles de errores y el equipo aprende a ignorarlos, que es el peor resultado posible. Mejor una regla cada sprint, o solo para código nuevo.",
+      "rubric": {
+        "junior": "Usa el preset recomendado de typescript-eslint.",
+        "mid": "Activa reglas type-checked y conoce no-floating-promises.",
+        "senior": "Justifica cada regla por los bugs que previene, conoce el coste de las reglas con tipos en tiempo de lint, y plantea la activación incremental para no destruir la señal."
+      },
+      "followUps": [
+        "¿Qué bug concreto atrapa no-floating-promises?",
+        "¿Por qué las reglas type-checked son más lentas?"
+      ]
+    },
+    {
+      "id": "ts-q034",
+      "level": "mid",
+      "topic": "Tipos",
+      "tags": [
+        "depuracion",
+        "inferencia"
+      ],
+      "prompt": "Este código no compila y el error es enorme. ¿Cómo lo depuras?\n\n```ts\nconst resultado = datos\n  .filter((d) => d.activo)\n  .map((d) => ({ ...d, total: d.items.reduce((a, b) => a + b.precio, 0) }))\n  .sort((a, b) => b.total - a.total);\n```",
+      "answer": "El problema de una cadena larga es que el error aparece al final y menciona un tipo gigante, sin decir en qué eslabón se torció.\n\n**Método: partir la cadena.**\n\n```ts\nconst activos = datos.filter((d) => d.activo);\nconst conTotal = activos.map((d) => ({ ...d, total: /* ... */ }));\nconst ordenado = conTotal.sort((a, b) => b.total - a.total);\n```\n\nAhora el error señala la línea exacta. Es el equivalente a dividir un cálculo para encontrar dónde sale mal.\n\n**Pregúntale al compilador qué infirió.** Pasa el ratón sobre cada variable en el editor. Muchas veces la sorpresa está en el primer paso, no en el último. Y si necesitas verlo sin editor:\n\n```ts\ntype Debug<T> = { [K in keyof T]: T[K] };   // expande el tipo al mostrarlo\ntype X = Debug<typeof conTotal>;\n```\n\n**Anota un punto intermedio.** Poner el tipo esperado en `conTotal` hace que el error salte ahí si la inferencia no coincide, en vez de propagarse.\n\nSospechosos habituales en este fragmento concreto:\n- `datos` es `any[]` o `unknown[]`, y todo lo demás hereda el problema.\n- `d.items` puede ser `undefined` y `reduce` falla al estrecharlo.\n- El `reduce` sin tipo explícito del acumulador: TypeScript lo infiere del valor inicial (`0`, `number`), y si el callback devuelve otra cosa, falla.\n- Y un detalle silencioso: **`sort` muta el array**. Aquí ordena `conTotal` además de devolverlo; con `toSorted` no.\n\nY leer el error **de abajo arriba**: la causa concreta suele estar en la última línea.",
+      "rubric": {
+        "junior": "Prueba cambios hasta que compile.",
+        "mid": "Parte la cadena para localizar el eslabón y consulta los tipos inferidos.",
+        "senior": "Ancla la inferencia con anotaciones intermedias, usa un tipo Debug para expandir, lee el error de abajo arriba, y detecta de paso la mutación de sort."
+      },
+      "followUps": [
+        "¿Cómo ves el tipo expandido de una expresión?",
+        "¿Qué problema tiene sort aquí además del tipado?"
+      ]
+    },
+    {
+      "id": "ts-q035",
+      "level": "senior",
+      "topic": "Sistema de tipos",
+      "tags": [
+        "solidez"
+      ],
+      "prompt": "¿Es sólido el sistema de tipos de TypeScript? ¿Dónde y por qué no?",
+      "answer": "**No, y es deliberado.** El objetivo declarado del equipo de TypeScript es la productividad sobre la corrección: un sistema sólido habría rechazado demasiados patrones legítimos de JavaScript y nadie lo habría adoptado.\n\nLos agujeros principales:\n\n1. **`any`**: la vía de escape explícita. Desactiva todo y es contagioso.\n2. **Aserciones (`as`)**: tú afirmas, el compilador cree. Sin comprobación.\n3. **Arrays covariantes**: `Perro[]` es asignable a `Animal[]`, y luego puedes meter un gato.\n4. **Bivarianza de parámetros de método**: aceptada en ambas direcciones por compatibilidad con el DOM y patrones históricos.\n5. **Acceso indexado sin `undefined`**: `arr[999]` se tipa como `T`. Se corrige con `noUncheckedIndexedAccess`, fuera de `strict` precisamente porque es incómodo.\n6. **Los datos externos no se validan**: los tipos se borran, así que `JSON.parse` devuelve lo que sea.\n7. **`Object.keys` devuelve `string[]`**, no `(keyof T)[]`. Y esto sí es *correcto*: por tipado estructural, un objeto puede tener más claves de las declaradas.\n\nLa forma madura de verlo: TypeScript es una **herramienta de productividad con muy buena relación coste/beneficio**, no un demostrador de corrección. Sabiendo dónde están los agujeros, se ponen defensas donde importan: validación en las fronteras, `unknown` en lugar de `any`, y prohibir `as` en revisión salvo justificación.\n\nQuien espera de TypeScript las garantías de Rust o Haskell se lleva una decepción; quien entiende el compromiso, obtiene casi todo el valor por una fracción del coste.",
+      "rubric": {
+        "junior": "Cree que si compila, es correcto.",
+        "mid": "Conoce any y las aserciones como agujeros y sabe que los tipos no existen en runtime.",
+        "senior": "Enumera los agujeros concretos con su motivo, entiende que la falta de solidez es una decisión de producto, y diseña defensas donde importan en vez de esperar garantías que el lenguaje no da."
+      },
+      "followUps": [
+        "¿Por qué Object.keys devuelve string[]?",
+        "¿Qué defensas pondrías sabiendo esto?"
+      ]
+    },
+    {
+      "id": "ts-q036",
+      "level": "senior",
+      "topic": "Tipos avanzados",
+      "tags": [
+        "tipos recursivos"
+      ],
+      "prompt": "¿Cómo se escriben tipos recursivos y cuáles son sus límites?",
+      "answer": "TypeScript admite tipos recursivos, con restricciones importantes.\n\n```ts\ntype Json =\n  | string | number | boolean | null\n  | Json[]\n  | { [k: string]: Json };\n\n// Rutas anidadas de un objeto, como 'usuario.direccion.ciudad'\ntype Rutas<T> = T extends object\n  ? { [K in keyof T & string]: K | `${K}.${Rutas<T[K]>}` }[keyof T & string]\n  : never;\n```\n\nLos límites:\n\n- **Profundidad de instanciación**: TypeScript corta alrededor de 50 niveles con \"Type instantiation is excessively deep and possibly infinite\". Es la protección contra recursión infinita.\n- **Coste**: cada nivel multiplica el trabajo. Un tipo recursivo sobre una estructura profunda puede añadir **segundos** a cada comprobación, y eso se paga en cada pulsación en el editor.\n- **Tail recursion**: desde TypeScript 4.5 hay eliminación de recursión de cola en conditional types, lo que permite recursiones mucho más largas si el tipo se escribe con acumulador.\n- **`interface` permite recursión directa** más fácilmente que `type`, porque se resuelve de forma perezosa.\n\nLa pregunta de criterio, que es la que importa: **¿merece la pena?** Un tipo que calcula rutas anidadas da un autocompletado espectacular en una función `get(obj, 'a.b.c')`. También puede hacer que el editor tarde tres segundos en responder, y que nadie del equipo sepa modificarlo.\n\nLa alternativa suele ser más barata: una función con sobrecargas, o pasar un callback (`get(obj, o => o.a.b.c)`) que el compilador tipa sin ninguna magia. Cuando existe una solución sin tipos avanzados, casi siempre gana.",
+      "rubric": {
+        "junior": "Ha visto tipos recursivos como el de JSON.",
+        "mid": "Escribe tipos recursivos y conoce el error de profundidad excesiva.",
+        "senior": "Cuantifica el coste en tiempo de comprobación, conoce la optimización de recursión de cola, y propone alternativas sin magia cuando el mantenimiento pesa más que la ergonomía."
+      },
+      "followUps": [
+        "¿Qué alternativa hay a tipar 'a.b.c' como string?",
+        "¿Qué es la eliminación de recursión de cola en tipos?"
+      ]
+    },
+    {
+      "id": "ts-q037",
+      "level": "senior",
+      "topic": "Arquitectura",
+      "tags": [
+        "api publica",
+        "compatibilidad"
+      ],
+      "prompt": "¿Cómo diseñas los tipos de una librería pública que tendrás que mantener años?",
+      "answer": "Los tipos de una librería son **parte del contrato**: cambiarlos rompe a los consumidores igual que cambiar el runtime, y mucha gente lo olvida.\n\nPrincipios:\n\n- **Superficie mínima.** Exporta solo los tipos que el usuario necesita nombrar. Cada tipo exportado es algo que tendrás que mantener compatible.\n- **Genéricos con valores por defecto**: `Cliente<T = unknown>` permite añadir parámetros de tipo después sin romper a quien escribió `Cliente`.\n- **Cuidado con las uniones exportadas.** Añadir un miembro a una unión que los usuarios consumen con `switch` exhaustivo **les rompe la compilación**. Es un cambio mayor, aunque en runtime sea aditivo. Hay que decidirlo de antemano y documentarlo.\n- **No expongas tipos de terceros** en tu API pública. Si devuelves un tipo de otro paquete, has acoplado a tus usuarios a su versión, y una actualización suya rompe la tuya.\n- **Prefiere `interface` para las formas extensibles**: el declaration merging deja que los usuarios las amplíen sin forzar un fork.\n- **`readonly` en lo que devuelves** y `readonly T[]` en lo que aceptas: documenta las intenciones y te deja libertad para cambiar la implementación.\n- **Deprecar antes de eliminar**: `@deprecated` con JSDoc aparece tachado en el editor del usuario, que es mucho más efectivo que una nota en el CHANGELOG.\n\nY dos cosas operativas:\n- **Probar los tipos** con `expect-type` o `tsd`, incluidos casos negativos con `@ts-expect-error`. Un cambio en los tipos que rompa a los usuarios debe romper tu CI primero.\n- **Publicar el `.d.ts` correctamente**: campo `types`, y `exports` bien configurado para ESM y CJS. Es donde más se falla, y un paquete con tipos que no se resuelven es un paquete sin tipos.\n\nLa comprobación que resuelve la mayoría de dudas: **escribe primero el código de uso**, como si fueras el consumidor.",
+      "rubric": {
+        "junior": "Exporta los tipos que usa y documenta.",
+        "mid": "Minimiza la superficie, usa valores por defecto en genéricos y depreca antes de eliminar.",
+        "senior": "Trata los tipos como contrato versionado, sabe que añadir a una unión exportada es breaking, evita filtrar tipos de terceros, y prueba los tipos en CI incluidos los casos negativos."
+      },
+      "followUps": [
+        "¿Por qué añadir a una unión exportada es breaking?",
+        "¿Qué problemas da publicar los .d.ts con ESM y CJS?"
+      ]
+    },
+    {
+      "id": "ts-q038",
+      "level": "senior",
+      "topic": "Herramientas",
+      "tags": [
+        "monorepo",
+        "escala"
+      ],
+      "prompt": "¿Cómo organizas TypeScript en un monorepo grande?",
+      "answer": "El problema a resolver es el **tiempo de comprobación**: sin estructura, cada cambio revalida todo el repositorio y el editor se arrastra.\n\nPiezas:\n\n- **Project references**: cada paquete tiene su `tsconfig.json` con `composite: true` y declara sus dependencias en `references`. TypeScript construye un grafo, genera `.d.ts` y **solo recomprueba lo afectado**. `tsc --build` respeta el orden.\n- **Un `tsconfig.base.json`** con las opciones comunes, que cada paquete extiende. Una sola definición de `strict` y `target`.\n- **Dependencias explícitas en cada `package.json`.** Esto es lo que convierte la arquitectura en algo verificable: si el paquete de dominio no declara `react`, es **imposible** importar un componente ahí. No depende de que alguien lo vea en una revisión.\n- **Alias de `paths` coherentes** entre TypeScript, el bundler y el runner de tests. Cuando divergen, se pierden horas.\n\nLa decisión más importante y menos evidente: **¿los paquetes se consumen como fuente o como build?**\n\n- **Como fuente** (`main` apuntando al `.ts`): sin paso de build, pero cada consumidor recompila el paquete y los tiempos se multiplican.\n- **Como build** (`.d.ts` + JavaScript): mucho más rápido para los consumidores, a costa de un paso de build y de configurar bien el desarrollo para que los cambios se propaguen.\n\nEn repositorios grandes, compilar los paquetes base y consumir sus `.d.ts` suele ser lo único viable.\n\nY el montaje habitual hoy: el **transpilado** lo hace esbuild o SWC (rápido, ignora los tipos) y **`tsc --noEmit` comprueba en paralelo o en CI**. Separar ambas cosas es lo que mantiene el ciclo de desarrollo rápido.",
+      "rubric": {
+        "junior": "Un tsconfig en la raíz para todo.",
+        "mid": "Usa un tsconfig base y configuraciones por paquete con paths.",
+        "senior": "Usa project references con composite para comprobación incremental, decide conscientemente entre consumir fuente o build, y separa transpilado de chequeo de tipos."
+      },
+      "followUps": [
+        "¿Qué aporta composite: true?",
+        "¿Consumir los paquetes como fuente o como build?"
+      ]
+    },
+    {
+      "id": "ts-q039",
+      "level": "senior",
+      "topic": "Arquitectura",
+      "tags": [
+        "modelado",
+        "dominio"
+      ],
+      "prompt": "¿Cómo usas el sistema de tipos para modelar reglas de negocio?",
+      "answer": "El principio: **hacer que los estados inválidos no se puedan escribir**. Cada invariante que el compilador garantiza es un test que no hay que escribir y un bug que no puede ocurrir.\n\nHerramientas, de más a menos usada:\n\n1. **Uniones discriminadas** para estados mutuamente excluyentes. Un pedido no puede estar \"pagado sin método de pago\": las variantes llevan justo los campos que aplican.\n\n```ts\ntype Pedido =\n  | { estado: 'borrador'; items: Item[] }\n  | { estado: 'pagado'; items: Item[]; pago: Pago; pagadoEn: Date }\n  | { estado: 'cancelado'; motivo: string };\n```\n\n2. **Branded types** para valores validados. Si tienes un `Email`, es válido: la validación ocurrió una vez, en el constructor, y el resto del código no vuelve a comprobarlo.\n\n3. **Tipos que codifican transiciones.** Una máquina de estados donde cada función acepta solo el estado de partida correcto: `function pagar(p: PedidoBorrador): PedidoPagado`. Intentar pagar un pedido cancelado **no compila**.\n\n4. **Tipos no vacíos**: `type NoVacio<T> = [T, ...T[]]` elimina el caso de la lista vacía donde el negocio dice que no puede estarlo, y con él todas las comprobaciones defensivas.\n\n5. **Unidades como tipos**: `Centimos` frente a `Euros`, `Metros` frente a `Pies`. Un error de unidades tumbó una sonda de la NASA; en una aplicación de facturación tiene el mismo tipo de coste.\n\nEl límite, y hay que decirlo: **no todo se puede expresar en tipos**, y forzarlo produce código que nadie entiende. \"El descuento no puede superar el 50% salvo para clientes premium con más de dos años\" es una validación en runtime, y está bien que lo sea.\n\nEl criterio: modela en tipos lo que sea **estructural** (qué campos existen juntos, qué transiciones son posibles); deja en runtime lo que sea **de valor** (rangos, reglas condicionales de negocio).",
+      "rubric": {
+        "junior": "Define interfaces para las entidades del dominio.",
+        "mid": "Usa uniones discriminadas para estados y evita campos opcionales innecesarios.",
+        "senior": "Codifica transiciones de estado en las firmas, usa branded types y unidades, y traza la línea entre lo que merece la pena expresar en tipos y lo que debe validarse en runtime."
+      },
+      "followUps": [
+        "¿Cómo impedirías pagar un pedido ya cancelado, en compilación?",
+        "¿Qué reglas NO intentarías expresar con tipos?"
+      ]
+    },
+    {
+      "id": "ts-q040",
+      "level": "senior",
+      "topic": "Herramientas",
+      "tags": [
+        "migracion",
+        "legado"
+      ],
+      "prompt": "Tienes 300.000 líneas de JavaScript y el equipo quiere TypeScript. ¿Cómo lo planteas?",
+      "answer": "Primero la pregunta que casi nadie hace: **¿qué problema concreto resuelve?** Si la respuesta es \"TypeScript es mejor\", no hay caso. Si es \"pasamos el 30% del tiempo de revisión en errores de tipos\" o \"tenemos N incidentes al mes por datos con forma inesperada\", ya se puede razonar y, sobre todo, medir si funcionó.\n\nPlan:\n\n1. **Infraestructura primero, código después.** Build, CI y editor funcionando con TypeScript en modo permisivo (`allowJs`, `strict: false`), sin migrar un solo fichero. Si esto falla, falla barato.\n2. **Nada de una rama larga.** Migrar en una rama de tres meses garantiza conflictos infinitos y que nunca se mergee. Fichero a fichero, en PRs pequeños, junto al trabajo normal.\n3. **Orden por el grafo de dependencias**: las hojas primero (utilidades, constantes, modelos). Tienen pocas dependencias y muchos dependientes, así que cada una mejora el autocompletado en muchos sitios.\n4. **Prioriza por dolor**: cruza el grafo con el historial de git y con los incidentes. Los ficheros que más cambian y más fallan son los que más rentabilizan tener tipos.\n5. **`strict` de forma incremental**, opción por opción, empezando por `noImplicitAny` y dejando `strictNullChecks` (la más costosa y la más valiosa) para cuando haya masa crítica.\n6. **Prohibir que crezca la deuda**: el código nuevo entra en TypeScript estricto desde el día uno, con una regla de CI.\n\nLo que **no** hay que hacer:\n- Poner `any` por todas partes para que compile. Tendrás todos los costes de TypeScript y ninguno de los beneficios, y nadie volverá a limpiarlo.\n- Reescribir mientras migras. Renombrar y tipar ya es riesgo suficiente.\n\nY el atajo de bajo compromiso que mucha gente no conoce: **`// @ts-check` con JSDoc** da comprobación de tipos en ficheros `.js` sin renombrar nada. Buena forma de que el equipo pruebe el sabor y de tipar zonas críticas antes de decidir.\n\nY comunicar con números: errores en producción, tiempo de revisión. Sin eso, una migración larga pierde el apoyo a mitad de camino, que es el peor resultado: dos lenguajes conviviendo para siempre.",
+      "rubric": {
+        "junior": "Propone migrar todo el proyecto a TypeScript.",
+        "mid": "Plantea migración incremental con allowJs y activación progresiva de strict.",
+        "senior": "Exige un problema medido, ordena por grafo cruzado con el historial de incidencias, impide que la deuda crezca, y gestiona el riesgo organizativo de una migración que se queda a medias."
+      },
+      "followUps": [
+        "¿Cómo priorizarías qué ficheros migrar primero?",
+        "¿Qué aporta @ts-check antes de migrar?"
+      ]
+    },
+    {
+      "id": "ts-q041",
+      "level": "senior",
+      "topic": "Sistema de tipos",
+      "tags": [
+        "inferencia"
+      ],
+      "prompt": "¿Cómo funciona la inferencia y cuándo conviene anotar explícitamente?",
+      "answer": "TypeScript infiere de varias fuentes: el valor inicial, el contexto de la expresión (*contextual typing*), el tipo de retorno del cuerpo, y los argumentos en una llamada genérica.\n\nReglas que explican la mayoría de las sorpresas:\n\n- **`const` infiere el tipo literal; `let` lo ensancha.** `const a = 'x'` es `'x'`; `let b = 'x'` es `string`.\n- **Las propiedades de objeto se ensanchan** aunque el objeto sea `const`. Por eso hace falta `as const` o `satisfies`.\n- **El tipado contextual** hace que en `arr.map(x => ...)` no tengas que anotar `x`: sale del array. Pero si extraes esa función a una variable, el contexto se pierde y hay que anotar.\n- **La inferencia de genéricos** va de los argumentos a los parámetros de tipo, y se rinde en casos ambiguos, cayendo a `unknown` o al constraint.\n\n**Cuándo anotar:**\n\n1. **Parámetros de función**: siempre (no hay contexto de donde inferir).\n2. **APIs públicas**: el retorno anotado fija el contrato, y un cambio accidental en el cuerpo falla **ahí** y no en el consumidor, tres paquetes más allá.\n3. **Para cortar una inferencia cara**: anotar un punto intermedio en una cadena larga de genéricos puede reducir segundos de compilación.\n4. **Cuando la inferencia es correcta pero ilegible**: un tipo inferido de 40 líneas que aparece en cada error.\n\n**Cuándo no anotar:**\n\n- Variables locales con valor inicial obvio. `const n: number = 5` es ruido, y peor: si el valor cambia, la anotación puede quedar desincronizada o forzar un tipo más amplio del real.\n- Retornos de funciones internas: dejar que se infiera evita que mientan.\n\nLa regla de fondo: **anota en los bordes, infiere dentro**. Los límites son contrato; el interior debe poder evolucionar sin fricción.",
+      "rubric": {
+        "junior": "Anota casi todo o casi nada, sin criterio.",
+        "mid": "Deja inferir las locales y anota las firmas públicas.",
+        "senior": "Conoce el ensanchamiento de literales y el tipado contextual, usa anotaciones para cortar inferencias caras, y articula la regla de anotar en los bordes e inferir dentro."
+      },
+      "followUps": [
+        "¿Por qué const infiere literal y let no?",
+        "¿Cuándo una anotación puede empeorar las cosas?"
+      ]
+    },
+    {
+      "id": "ts-q042",
+      "level": "senior",
+      "topic": "Arquitectura",
+      "tags": [
+        "fullstack",
+        "contratos"
+      ],
+      "prompt": "¿Qué aporta y qué cuesta compartir tipos entre frontend y backend?",
+      "answer": "**Lo que aporta:** la fuente única de verdad. Un cambio incompatible en el servidor rompe el build del cliente, en lugar de aparecer en producción. Es la promesa de tRPC y de los monorepos TypeScript, y es real.\n\n**Lo que cuesta, y se subestima:**\n\n1. **Acoplamiento de despliegue.** Si el cliente se compila contra los tipos exactos del servidor, ambos tienen que evolucionar juntos. Eso choca con la realidad: **las apps móviles y las pestañas abiertas siguen usando la versión de ayer**. El contrato real no es \"lo que el servidor expone hoy\", sino \"la unión de lo que todos los clientes desplegados esperan\".\n2. **Los tipos internos se filtran.** Si compartes directamente el tipo de la entidad de base de datos, acabas exponiendo columnas internas y atándote a su forma. Hay que compartir **tipos de contrato (DTOs)**, no modelos internos.\n3. **Los tipos no son el contrato completo.** No expresan qué errores puede devolver, qué campos son opcionales *según el caso*, ni las reglas de autorización. Compartir tipos da una falsa sensación de que el contrato está cerrado.\n4. **Obliga a TypeScript en ambos lados**, lo que puede ser una restricción de arquitectura importante.\n\nY el punto que casi nadie menciona: **compartir tipos no elimina la validación en runtime**. El servidor debe validar lo que le llega aunque el cliente esté tipado, porque un cliente puede ser malicioso o estar desactualizado. Y el cliente debe validar lo que recibe.\n\nEl criterio práctico: comparte tipos **cuando el despliegue es conjunto** (una web y su API, mismo repositorio, mismo deploy). Con clientes móviles o APIs públicas, un contrato versionado y explícito (OpenAPI) envejece mucho mejor, aunque cueste más al principio.",
+      "rubric": {
+        "junior": "Ve compartir tipos como una ventaja sin matices.",
+        "mid": "Comparte DTOs en vez de modelos internos y mantiene la validación en el servidor.",
+        "senior": "Identifica el acoplamiento de despliegue y los clientes desactualizados como el coste real, distingue contrato de tipos, y elige según el modelo de despliegue."
+      },
+      "followUps": [
+        "¿Qué pasa con los clientes móviles ya desplegados?",
+        "¿Compartir tipos elimina la validación en el servidor?"
+      ]
+    },
+    {
+      "id": "ts-q043",
+      "level": "senior",
+      "topic": "Calidad",
+      "tags": [
+        "revision",
+        "equipo"
+      ],
+      "prompt": "¿Qué buscas específicamente al revisar TypeScript?",
+      "answer": "Además de lo habitual de cualquier revisión, las cosas propias del lenguaje, por orden de gravedad:\n\n1. **`any` y aserciones.** ¿Por qué está ahí? Un `as` suele señalar que el modelo de datos está mal o que falta validación. `as unknown as T` casi siempre indica un diseño equivocado. `any` es contagioso: contamina todo lo que toca.\n\n2. **Validación en las fronteras.** ¿Se está confiando en que la API devuelve lo declarado? Es la causa raíz de la mayoría de los errores de tipo que llegan a producción.\n\n3. **Estados imposibles representables.** Campos opcionales que en realidad son excluyentes: tres `?` que deberían ser una unión discriminada. Es donde un comentario pequeño en revisión evita diez bugs.\n\n4. **`!` (non-null assertion).** Cada uno es una promesa sin verificar. A veces es correcto y local; si hay cinco en una función, el tipo está mal modelado.\n\n5. **Tipos demasiado listos.** Un conditional type anidado de cuatro niveles que hace magia. Pregunta clave: ¿quién lo mantiene cuando quien lo escribió no esté? Y: ¿cuánto añade al tiempo de compilación?\n\n6. **Tipos duplicados** en vez de derivados. Si se puede sacar con `Pick`, `Omit` o `z.infer`, duplicarlo garantiza que un día divergirán.\n\n7. **Promesas flotantes.** Un `async` sin `await` ni `catch`. El linter debería atraparlo, pero si no está la regla, hay que verlo a ojo.\n\nY sobre la forma: **preguntar antes que afirmar**. \"¿Qué pasa si la API devuelve null aquí?\" enseña más que \"quita ese `as`\", y a veces descubres una razón que no viste. Distinguir siempre lo que bloquea de la sugerencia.",
+      "rubric": {
+        "junior": "Comprueba que los tipos están puestos y que compila.",
+        "mid": "Cuestiona los any y las aserciones y revisa la validación de datos externos.",
+        "senior": "Prioriza el modelado (estados imposibles) sobre la sintaxis, evalúa el coste de mantenimiento y compilación de los tipos ingeniosos, y cuida la forma del comentario."
+      },
+      "followUps": [
+        "¿Qué te dice que haya cinco `!` en una función?",
+        "¿Cuándo un tipo es demasiado listo?"
+      ]
+    },
+    {
+      "id": "ts-q044",
+      "level": "senior",
+      "topic": "Sistema de tipos",
+      "tags": [
+        "limitaciones"
+      ],
+      "prompt": "¿Qué cosas TypeScript no puede expresar y cómo las resuelves?",
+      "answer": "Conocer los límites es lo que evita perder días intentando lo imposible.\n\n1. **Tipado nominal real.** El sistema es estructural. Se emula con branded types, pero es un apaño: la marca se puede falsificar con un `as`.\n\n2. **Tipos dependientes.** No se puede expresar \"un array cuya longitud es N\" ni \"este número está entre 1 y 100\". Los tipos no dependen de valores en runtime. Esto va a runtime, con validación.\n\n3. **Higher-kinded types.** No se puede abstraer sobre un constructor de tipos: escribir un `Functor<F>` que funcione para `Array`, `Promise` y `Option` a la vez. Hay emulaciones (el patrón HKT de fp-ts) pero son crípticas y arrastran mucho ruido. Es el límite que más frustra a quien viene de Haskell o Scala.\n\n4. **Efectos comprobados.** No hay forma de declarar que una función puede lanzar, y qué. De ahí la utilidad de un tipo `Result` para los errores del dominio.\n\n5. **Exhaustividad sobre uniones abiertas.** Si el conjunto puede crecer desde fuera, no se puede garantizar cobertura.\n\n6. **Invariantes entre argumentos.** \"Si el primer parámetro es 'a', el segundo debe ser un número\" se puede hacer con sobrecargas o uniones discriminadas de parámetros, pero se vuelve inmanejable rápido.\n\n7. **Nada en runtime.** No hay reflexión de tipos. Para eso, esquemas con Zod, decoradores con metadata, o generación de código.\n\nLa forma madura de trabajar con esto: **usar el sistema de tipos donde es fuerte** (formas de objetos, uniones de estados, relaciones entre entrada y salida) y **no pelearse donde es débil** (valores, efectos, abstracción de orden superior). Un día perdido intentando expresar una invariante en tipos es un día que una validación de tres líneas habría resuelto.",
+      "rubric": {
+        "junior": "Asume que todo se puede tipar con esfuerzo suficiente.",
+        "mid": "Conoce las limitaciones con los valores en runtime y usa validación.",
+        "senior": "Enumera límites concretos (nominal, dependientes, HKT, efectos), y aplica el criterio de usar el sistema donde es fuerte en lugar de forzarlo donde no llega."
+      },
+      "followUps": [
+        "¿Qué son los higher-kinded types y por qué faltan?",
+        "¿Cómo expresarías 'un número entre 1 y 100'?"
+      ]
+    },
+    {
+      "id": "ts-q045",
+      "level": "senior",
+      "topic": "Herramientas",
+      "tags": [
+        "build",
+        "ecosistema"
+      ],
+      "prompt": "¿Cuál es el estado actual del ecosistema de build de TypeScript?",
+      "answer": "El cambio de fondo de los últimos años: **separar el transpilado de la comprobación de tipos**.\n\n- **Transpilado**: esbuild, SWC o el propio Vite. Borran los tipos y emiten JavaScript, **sin comprobar nada**. Son uno o dos órdenes de magnitud más rápidos que `tsc` precisamente porque no hacen análisis de tipos.\n- **Comprobación**: `tsc --noEmit`, en paralelo en desarrollo y como puerta en CI.\n\nEsto es lo que hace que un proyecto grande arranque en un segundo en vez de en un minuto.\n\nLa consecuencia que hay que conocer: los transpiladores compilan **fichero a fichero**, sin ver el resto del programa. De ahí `isolatedModules`, que prohíbe lo que no se puede resolver localmente:\n- `const enum` (necesita saber el valor de otro fichero).\n- Reexportar un tipo sin `export type` (el transpilador no sabe si es tipo o valor).\n- De ahí también `verbatimModuleSyntax` y la recomendación de `import type` explícito.\n\nOtras piezas del estado actual:\n- **Node ejecuta TypeScript directamente** con *type stripping* en versiones recientes, lo que elimina el paso de build para scripts y servicios sencillos.\n- **Los decoradores** del estándar (fase 3) difieren de los antiguos `experimentalDecorators`, y hay ecosistemas enteros (Angular, NestJS, TypeORM) apoyados en los viejos. La convivencia es un problema real.\n- **El compilador reescrito en Go** promete mejoras de velocidad grandes, pero conviene tratarlo como lo que es hasta que esté estable: una promesa.\n\nLa recomendación práctica: transpilar rápido, comprobar aparte, activar `isolatedModules` desde el principio (evita descubrir las incompatibilidades tarde) y **fijar las versiones** de TypeScript y del transpilador, porque las discrepancias entre ellos producen errores muy confusos.",
+      "rubric": {
+        "junior": "Usa tsc o lo que traiga el framework.",
+        "mid": "Conoce esbuild o SWC y sabe que no comprueban tipos.",
+        "senior": "Explica por qué separar transpilado de chequeo, conoce las restricciones de isolatedModules y su origen, y la situación de los decoradores y del type stripping en Node."
+      },
+      "followUps": [
+        "¿Por qué isolatedModules prohíbe const enum?",
+        "¿Qué diferencia hay entre los decoradores viejos y los del estándar?"
+      ]
+    },
+    {
+      "id": "ts-q046",
+      "level": "senior",
+      "topic": "Calidad",
+      "tags": [
+        "deuda",
+        "estandares"
+      ],
+      "prompt": "¿Cómo evitas que el tipado se degrade en un equipo grande?",
+      "answer": "El tipado se degrada igual que cualquier otra cosa: bajo presión de entrega, un `any` es la salida rápida. Y el `any` es contagioso, así que la degradación se acelera sola.\n\nJerarquía de defensas, de más a menos efectiva:\n\n1. **Hacerlo imposible.** Si el paquete de dominio no declara React entre sus dependencias, nadie puede importar un componente ahí. No hay nada que recordar.\n2. **Automático.** Reglas de lint: `no-explicit-any`, `no-unsafe-assignment`, `no-floating-promises`, `consistent-type-imports`. Una regla discute mejor que una persona: es consistente, inmediata y no genera roce.\n3. **Medible.** Herramientas como `type-coverage` dan un porcentaje de expresiones tipadas. Ponerlo en CI **con un umbral que solo puede subir** es sorprendentemente efectivo: no exige arreglar el pasado, solo prohíbe empeorar. Es el mismo mecanismo que hace funcionar las migraciones incrementales.\n4. **Convenido.** Un ADR corto sobre cuándo se acepta un `as` y cuándo no. Si no está escrito, no existe.\n5. **Revisión humana.** El último recurso, para lo que no se puede automatizar: el modelado.\n\nSobre el proceso, lo que más importa:\n\n- **Las reglas se acuerdan, no se imponen.** Una regla que el equipo no comparte se esquiva con `// eslint-disable` y genera resentimiento.\n- **Activación incremental.** Encender el preset estricto de golpe produce miles de errores, y el equipo aprende a ignorar la salida del linter. Es el peor resultado posible, porque destruye la señal.\n- **Un escape legítimo y visible.** Si no hay forma aceptada de saltarse la regla cuando hace falta de verdad, la gente inventa una peor. Un `// eslint-disable-next-line` **con comentario obligatorio explicando por qué** es mejor que un `any` silencioso: queda documentado y es buscable.\n\nY el criterio de éxito: no que el código cumpla, sino que **el equipo lo mantenga sin ti**.",
+      "rubric": {
+        "junior": "Pide en las revisiones que no se use any.",
+        "mid": "Configura reglas de lint y las aplica en CI.",
+        "senior": "Ordena las defensas empezando por hacer imposible el error, mide con un umbral que solo sube, prevé un escape documentado, y activa reglas incrementalmente para no destruir la señal."
+      },
+      "followUps": [
+        "¿Qué es un umbral que solo puede subir y por qué funciona?",
+        "¿Por qué prever un escape legítimo?"
+      ]
+    },
+    {
+      "id": "ts-q047",
+      "level": "senior",
+      "topic": "Tipos avanzados",
+      "tags": [
+        "inferencia",
+        "genericos"
+      ],
+      "prompt": "¿Por qué a veces TypeScript infiere un genérico peor de lo que esperas?",
+      "answer": "Casos concretos, que son los que hay que reconocer en el momento:\n\n**1. Ensanchamiento de literales.** Los argumentos se ensanchan salvo que el parámetro de tipo esté restringido a algo literal:\n\n```ts\nfunction f<T>(x: T): T { return x; }\nf('a');                        // string, no 'a'\n\nfunction g<T extends string>(x: T): T { return x; }\ng('a');                        // 'a'\n```\nLa restricción `extends string` es lo que le dice a TypeScript que la precisión importa.\n\n**2. Inferencia desde varios sitios.** Si `T` aparece en dos parámetros con tipos distintos, TypeScript elige un supertipo común o falla. Se fuerza con `NoInfer<T>` (disponible desde 5.4), que le dice de qué posición **no** debe inferir:\n\n```ts\nfunction elegir<T>(opciones: T[], porDefecto: NoInfer<T>): T { }\nelegir(['a', 'b'], 'c');   // ahora error, como debe ser\n```\n\n**3. Inferencia contextual perdida.** Un callback en línea recibe su tipo del contexto; extraído a una variable, lo pierde.\n\n**4. Objetos ensanchados.** Las propiedades de un objeto literal se ensanchan a `string` o `number` salvo `as const` o `satisfies`.\n\n**5. Genéricos que no aportan.** Si un parámetro de tipo aparece **una sola vez** en la firma, no relaciona nada y equivale a `unknown`. Es la señal más clara de un genérico mal puesto.\n\n**6. Orden de inferencia con genéricos parciales.** TypeScript no tiene inferencia parcial: o infieres todos los parámetros de tipo o los escribes todos. El apaño habitual es currificar la función en dos llamadas, una que fija los explícitos y otra que infiere el resto.\n\nLa herramienta para todo esto es el editor: pasar el ratón y ver qué infirió de verdad. Casi siempre la sorpresa está un paso antes de donde salta el error.",
+      "rubric": {
+        "junior": "No distingue estos casos y añade anotaciones hasta que compila.",
+        "mid": "Conoce el ensanchamiento de literales y usa extends para conservar precisión.",
+        "senior": "Conoce NoInfer, la ausencia de inferencia parcial y el patrón de currificar, y la regla de que un parámetro de tipo usado una sola vez no aporta nada."
+      },
+      "followUps": [
+        "¿Para qué sirve NoInfer?",
+        "¿Qué haces si necesitas fijar un genérico e inferir otro?"
+      ]
+    },
+    {
+      "id": "ts-q048",
+      "level": "senior",
+      "topic": "Arquitectura",
+      "tags": [
+        "decisiones"
+      ],
+      "prompt": "¿Cuándo NO usarías TypeScript?",
+      "answer": "Poder argumentar esto es lo que distingue el criterio del entusiasmo.\n\nCasos donde el coste supera al beneficio:\n\n1. **Scripts pequeños y de usar y tirar.** Un script de 50 líneas que se ejecuta una vez no gana nada con tipos, y sí pierde tiempo de configuración.\n2. **Prototipos para validar una idea**, donde el código se va a tirar. Los tipos ralentizan la exploración, que es justo lo que interesa maximizar ahí. Con la condición explícita de que el prototipo **no** se convierta en producción por inercia, que es lo que pasa siempre.\n3. **Equipos sin experiencia y con un plazo inmediato.** La curva es real. Introducir TypeScript en mitad de una entrega crítica añade riesgo sin devolver nada a tiempo.\n4. **Donde los tipos serían casi todo `any`**: mucha interoperabilidad con librerías sin tipar o datos dinámicos por naturaleza. Tendrías el coste sin el beneficio.\n5. **Cuando el problema real es otro.** Si el equipo no tiene tests, ni observabilidad, ni revisiones, TypeScript no es la primera inversión. Resuelve una clase concreta de errores y hay otras más graves sin cubrir.\n\nAlternativas intermedias que casi nadie considera:\n- **JSDoc con `// @ts-check`**: comprobación de tipos en ficheros `.js`, sin paso de build ni renombrar nada. Muchas librerías (Svelte lo hizo) han elegido esto deliberadamente para no obligar a compilar.\n- Tipar solo la capa de dominio y dejar el resto en JavaScript.\n\nY el argumento a favor que sí es sólido, para cerrar: el valor de TypeScript **crece con el tamaño del equipo y con la vida del código**. En un proyecto de una persona a tres meses es discutible; en uno de veinte personas a cinco años, la pregunta no es si compensa, sino cómo sobrevivirías sin él. El refactor seguro es el beneficio real, mucho más que evitar typos.",
+      "rubric": {
+        "junior": "Responde que siempre hay que usarlo.",
+        "mid": "Reconoce que en scripts y prototipos puede sobrar.",
+        "senior": "Argumenta desde el coste de oportunidad, conoce JSDoc con @ts-check como intermedio, y relaciona el valor con el tamaño del equipo y la vida del código."
+      },
+      "followUps": [
+        "¿Qué aporta JSDoc con @ts-check?",
+        "¿Por qué Svelte eligió JSDoc en vez de TypeScript para su código?"
+      ]
+    },
+    {
+      "id": "ts-q049",
+      "level": "senior",
+      "topic": "Calidad",
+      "tags": [
+        "mentoria"
+      ],
+      "prompt": "Un compañero pone `as any` para callar errores. ¿Cómo lo abordas?",
+      "answer": "Primero **entender antes de corregir**. Un `as any` casi nunca es pereza: normalmente es alguien atascado con un error que no entiende y con una tarea que entregar. Empezar por ahí cambia toda la conversación.\n\nEn el momento:\n- **Preguntar, no afirmar.** \"¿Qué error te daba aquí?\" En bastantes casos descubres que el tipo de la librería está mal, o que faltaba validación, y el `as any` estaba tapando un problema real que nadie había visto.\n- **Resolverlo juntos una vez.** Enseñar la técnica correcta para *ese* caso (estrechar, validar, un tipo bien modelado) vale más que diez comentarios pidiendo que lo quite. Si además le ahorra tiempo la próxima vez, no hay que insistir más.\n- **Distinguir lo que bloquea.** Un `as any` en un test o en un script no es lo mismo que en la capa de datos. Bloquear por todos desgasta y hace que la gente deje de escuchar.\n\nA medio plazo, si el patrón se repite, **el problema no es de la persona**:\n- ¿Hay una convención escrita sobre cuándo se acepta? Si no está escrita, no existe.\n- ¿Lo detecta el linter, o depende de que alguien lo vea? Todo lo automatizable no debería estar en una revisión humana.\n- ¿Hay ejemplos de referencia en el repositorio de cómo se tipa una respuesta de API?\n- **¿Hay una vía de escape legítima?** Si no existe una forma aceptada de saltarse la regla cuando de verdad hace falta, la gente inventa una peor. Un `@ts-expect-error` con comentario obligatorio es mejor que un `as any` silencioso: queda documentado, es buscable, y desaparece solo cuando el tipo se arregla.\n\nY la comprobación honesta de fondo: **si varias personas del equipo hacen lo mismo, es un fallo del sistema, no de ellas.** Puede que los tipos de esa zona sean genuinamente insoportables, y entonces el trabajo es arreglarlos, no pedir más disciplina.",
+      "rubric": {
+        "junior": "Le dice que no use any y que lo arregle.",
+        "mid": "Explica el porqué, propone la alternativa y configura una regla de lint.",
+        "senior": "Empieza por entender la causa, enseña resolviendo un caso juntos, prevé una vía de escape documentada, y lee el patrón repetido como fallo del sistema y no de la persona."
+      },
+      "followUps": [
+        "¿Por qué @ts-expect-error es mejor que as any?",
+        "¿Qué harías si media plantilla hace lo mismo?"
+      ]
+    },
+    {
+      "id": "ts-q050",
+      "level": "senior",
+      "topic": "Arquitectura",
+      "tags": [
+        "futuro",
+        "criterio"
+      ],
+      "prompt": "¿Cómo decides si adoptar una característica nueva del lenguaje o del ecosistema?",
+      "answer": "Criterios, en orden:\n\n1. **¿Qué problema concreto resuelve que tengamos hoy?** Si no hay respuesta, no hay caso. \"Es lo nuevo\" o \"lo usa todo el mundo\" no son razones.\n2. **¿Cuál es el estado de estandarización?** En TypeScript, distinguir entre una característica estable, una detrás de un flag, y algo que aún puede cambiar. Los decoradores son el ejemplo doloroso: mucha gente adoptó `experimentalDecorators` y el estándar acabó siendo distinto, dejando a ecosistemas enteros en una versión que no converge.\n3. **¿Es reversible?** Una característica local y fácil de quitar (usar `satisfies` en un fichero) se prueba y ya. Una que se filtra por toda la base de código (un patrón de tipos, una librería de validación) merece análisis, porque desandarla cuesta semanas.\n4. **¿Cuánto sube el listón para el equipo?** Un tipo condicional ingenioso que solo entiende quien lo escribió es una deuda, no una mejora. El código lo leen más veces de las que se escribe.\n5. **¿Cuál es el coste de compilación?** Algunas construcciones de tipos elegantes cuestan segundos en cada guardado. Eso se multiplica por el tamaño del equipo y por las veces que guardan al día.\n6. **¿Qué versión mínima obliga?** Si tus consumidores no pueden actualizar, da igual lo buena que sea.\n\nY el método que evita la mayoría de los errores: **adoptar en un sitio acotado primero**, vivir con ello unas semanas, y luego decidir si se extiende. La sensación inicial con una característica nueva casi nunca coincide con la de dos meses después, cuando ya has tenido que depurar un error suyo a las once de la noche.\n\nY una cosa que conviene decir en voz alta en estas discusiones: a veces la motivación real es **aburrimiento o miedo a quedarse obsoleto**. Son razones legítimas para la retención del equipo, pero hay que ponerlas sobre la mesa como lo que son, no disfrazarlas de argumentos técnicos.",
+      "rubric": {
+        "junior": "Adopta lo que ve en tutoriales y en redes.",
+        "mid": "Valora madurez, soporte y curva de aprendizaje.",
+        "senior": "Pondera reversibilidad, coste de compilación y listón para el equipo; prueba en un ámbito acotado antes de extender; y nombra honestamente la motivación no técnica cuando existe."
+      },
+      "followUps": [
+        "¿Qué enseñó el caso de los decoradores?",
+        "¿Cómo pruebas algo nuevo sin comprometer el proyecto?"
+      ]
+    }
+  ],
+  "exercises": [
+    {
+      "id": "ts-e001",
+      "title": "Modelar estado sin estados imposibles",
+      "difficulty": "easy",
+      "topic": "Modelado",
+      "statement": "Este tipo permite estados que no deberían existir. Cuenta cuántas combinaciones admite, cuántas son válidas, y remodélalo para que las inválidas no se puedan escribir.\n\n```ts\ninterface EstadoPeticion {\n  cargando: boolean;\n  error?: string;\n  datos?: Usuario[];\n}\n```",
+      "hints": [
+        "Cada campo opcional o booleano multiplica las combinaciones posibles.",
+        "¿Qué significa cargando: true junto con error definido?",
+        "Una unión discriminada solo admite las variantes que declaras."
+      ],
+      "approach": "Cuenta primero: `cargando` da 2 valores, `error` presente o no da 2, `datos` presente o no da 2. Son **8 combinaciones**, y solo **3** tienen sentido: cargando, error, y con datos.\n\nLas otras cinco son bugs esperando a ocurrir: cargando **y** con error, listo pero sin datos, error y datos a la vez. Y ninguna la impide el compilador, así que tarde o temprano alguien las produce.\n\nEl síntoma que lo delata: el código de la UI se llena de `datos!` y de comprobaciones defensivas encadenadas, porque TypeScript no puede saber que si no hay error ni carga, entonces hay datos.\n\nLa solución es una **unión discriminada**: declarar exactamente las tres variantes válidas, cada una con los campos que le corresponden. Las otras cinco combinaciones dejan de existir como algo escribible. No es que se detecten: es que **no se pueden teclear**.\n\nDos mejoras que vienen gratis:\n- El `switch` estrecha el tipo, así que dentro de `case 'listo'` el campo `datos` existe y no es opcional. Adiós a los `!`.\n- Con un `default` que asigne a `never`, añadir una variante nueva (por ejemplo `'vacio'`) **rompe la compilación** en todos los sitios que hay que actualizar, en vez de caer silenciosamente en un `else`.\n\nAñadir el estado `'ocioso'` (aún no se ha pedido nada) suele ser el cuarto que falta y que nadie modela, y es el que provoca el spinner que aparece antes de que el usuario haga nada.",
+      "solutionSketch": "```ts\ntype EstadoPeticion =\n  | { estado: 'ocioso' }\n  | { estado: 'cargando' }\n  | { estado: 'error'; mensaje: string }\n  | { estado: 'listo'; datos: Usuario[] };\n\nfunction render(e: EstadoPeticion) {\n  switch (e.estado) {\n    case 'ocioso':   return <Vacio />;\n    case 'cargando': return <Spinner />;\n    case 'error':    return <Error texto={e.mensaje} />;   // mensaje existe\n    case 'listo':    return <Lista items={e.datos} />;     // datos existe\n    default:\n      // Si se añade una variante y no se trata, esto no compila.\n      return asegurarExhaustivo(e);\n  }\n}\n\nfunction asegurarExhaustivo(x: never): never {\n  throw new Error(`Caso sin tratar: ${JSON.stringify(x)}`);\n}\n```",
+      "complexity": "Sin coste en runtime: es solo modelado. Pasa de 8 combinaciones representables (3 válidas) a exactamente 4 válidas.",
+      "pitfalls": [
+        "Dejar los campos opcionales y confiar en la disciplina para no combinarlos mal.",
+        "Llenar la UI de `!` para convencer al compilador, que es la señal de que el modelo está mal.",
+        "Olvidar el estado inicial 'ocioso' y mostrar un spinner antes de que el usuario pida nada.",
+        "Poner un `default` que no use never: pierdes la comprobación de exhaustividad."
+      ]
+    },
+    {
+      "id": "ts-e002",
+      "title": "Tipar una función de acceso por clave",
+      "difficulty": "easy",
+      "topic": "Genéricos",
+      "statement": "Escribe `get(objeto, clave)` que devuelva el tipo exacto de esa propiedad y rechace en compilación una clave que no exista. Después extiéndelo a claves anidadas con notación de punto, y decide si merece la pena.",
+      "hints": [
+        "keyof T da la unión de las claves; T[K] el tipo de una de ellas.",
+        "Restringe el genérico de la clave con extends keyof T.",
+        "Para anidado hacen falta template literal types recursivos. ¿Hay alternativa más simple?"
+      ],
+      "approach": "La versión de un nivel es el ejemplo canónico de genéricos con `keyof`:\n\nSin genéricos, `get(obj, clave)` solo puede devolver la unión de todos los tipos de valor, o `any`. Con `K extends keyof T` y retorno `T[K]`, TypeScript devuelve el tipo **de la clave concreta** que pasaste, y una clave inexistente falla al compilar.\n\nEl anidado es donde empieza lo interesante, y también donde hay que decidir.\n\nSe puede hacer: un template literal type recursivo genera todas las rutas válidas (`'usuario.direccion.ciudad'`) y otro tipo recursivo resuelve el tipo en esa ruta. El autocompletado resultante es espectacular: escribes la comilla y el editor te ofrece todas las rutas del objeto.\n\nEl coste, que hay que sopesar:\n- Los tipos recursivos sobre objetos profundos **cuestan tiempo de compilación** en cada comprobación, y eso se paga en cada pulsación en el editor.\n- Con objetos muy anidados se llega al límite de profundidad de instanciación.\n- Nadie del equipo va a saber modificar ese tipo.\n\nY existe una alternativa que da el 90% del valor con el 0% de la magia: **pasar un callback** en vez de un string. `get(obj, o => o.usuario.direccion.ciudad)` lo tipa el compilador sin ningún tipo avanzado, funciona con el autocompletado normal, y sobrevive a un renombrado automático (un string, no).\n\nLa respuesta con criterio: la versión de un nivel siempre; la anidada con strings solo si de verdad necesitas la ruta como dato (formularios dinámicos, traducciones, tablas configurables). Si no, callback.",
+      "solutionSketch": "```ts\n// Un nivel: simple y suficiente casi siempre.\nfunction get<T extends object, K extends keyof T>(obj: T, clave: K): T[K] {\n  return obj[clave];\n}\n\nconst u = { id: '1', edad: 30, activo: true };\nget(u, 'id');     // string\nget(u, 'edad');   // number\n// get(u, 'otra'); // error de compilación\n\n// Anidado con notación de punto: potente y caro.\ntype Rutas<T> = T extends object\n  ? { [K in keyof T & string]: K | `${K}.${Rutas<T[K]>}` }[keyof T & string]\n  : never;\n\ntype EnRuta<T, R extends string> = R extends `${infer A}.${infer Resto}`\n  ? A extends keyof T ? EnRuta<T[A], Resto> : never\n  : R extends keyof T ? T[R] : never;\n\nfunction getEn<T extends object, R extends Rutas<T>>(\n  obj: T,\n  ruta: R,\n): EnRuta<T, R> {\n  return ruta.split('.').reduce<any>((o, k) => o?.[k], obj);\n}\n\n// Alternativa sin magia: el compilador lo tipa solo.\nfunction getPor<T, R>(obj: T, seleccionar: (o: T) => R): R {\n  return seleccionar(obj);\n}\ngetPor(datos, (d) => d.usuario.direccion.ciudad);   // string, sin tipos raros\n```",
+      "complexity": "En runtime O(1) para un nivel, O(profundidad) para la ruta. En compilación, la versión recursiva crece con el tamaño y la profundidad del objeto.",
+      "pitfalls": [
+        "Tipar la clave como string: pierdes toda la comprobación y el retorno es any.",
+        "Usar tipos recursivos en objetos muy profundos y encontrarte el error de profundidad excesiva.",
+        "Olvidar que un string de ruta no sobrevive a un renombrado automático, y un callback sí.",
+        "Que el reduce interno devuelva any y nadie lo note, anulando el tipado que tanto costó."
+      ]
+    },
+    {
+      "id": "ts-e003",
+      "title": "Validar en la frontera con Zod",
+      "difficulty": "medium",
+      "topic": "Validación",
+      "statement": "Tipa y valida la respuesta de una API que a veces incumple su contrato: campos ausentes, fechas como string, números que llegan como texto y un campo que a veces es objeto y a veces array. Sin escribir el tipo dos veces.",
+      "hints": [
+        "z.infer deriva el tipo del esquema, no al revés.",
+        "Zod puede transformar mientras valida, no solo comprobar.",
+        "safeParse te devuelve el resultado en lugar de lanzar. ¿Cuándo prefieres cada uno?"
+      ],
+      "approach": "La regla de fondo: **una sola fuente de verdad**. Si escribes la interfaz y el esquema por separado, se desincronizarán, probablemente la primera semana. Con `z.infer` el tipo **sale** del esquema y es imposible que divergan.\n\nEl segundo punto es que Zod no solo valida: **transforma**. Una fecha llega como string ISO y quieres un `Date` en tu dominio; un número llega como texto y quieres un `number`. Hacer esa conversión dentro del esquema significa que **a partir de la frontera todo el código trabaja con tipos correctos**, en vez de ir convirtiendo por ahí y olvidándose en algún sitio.\n\nPara el campo que a veces es objeto y a veces array (un clásico de APIs que no distinguen \"un elemento\" de \"varios\"), `z.union` más un `transform` que normalice a array siempre. El resto del programa ni se entera de la inconsistencia.\n\n`parse` frente a `safeParse`: `parse` lanza, y es lo correcto cuando un fallo es excepcional y no hay nada que hacer salvo reportar. `safeParse` devuelve un resultado discriminado y es lo correcto cuando el fallo es esperable y quieres decidir, por ejemplo mostrando un mensaje y usando datos cacheados.\n\nY los dos detalles que separan una implementación de producción:\n- **Registrar el payload crudo** cuando la validación falle (sin datos personales). Un error de parseo sin lo que lo causó es prácticamente imposible de reproducir.\n- **`.catch()` o valores por defecto en campos no esenciales**: que falte la biografía no debería tirar la pantalla entera. Fallar duro solo en lo que impide continuar.",
+      "solutionSketch": "```ts\nimport { z } from 'zod';\n\nconst Usuario = z.object({\n  id: z.string().uuid(),\n  email: z.string().email(),\n\n  // La API manda ISO; el dominio quiere Date.\n  creadoEn: z.string().datetime().transform((s) => new Date(s)),\n\n  // A veces manda el número como texto.\n  edad: z.coerce.number().int().positive().optional(),\n\n  // No esencial: si falta o es inválido, seguimos.\n  bio: z.string().catch(''),\n\n  // A veces objeto, a veces array: normalizamos a array.\n  roles: z\n    .union([Rol, z.array(Rol)])\n    .transform((r) => (Array.isArray(r) ? r : [r])),\n});\n\n// Una sola fuente de verdad: el tipo sale del esquema.\ntype Usuario = z.infer<typeof Usuario>;\n\nasync function cargarUsuario(id: string): Promise<Usuario> {\n  const res = await fetch(`/api/usuarios/${id}`);\n  if (!res.ok) throw new ApiError(res.status, 'Fallo al cargar');\n\n  const crudo = await res.json();\n  const r = Usuario.safeParse(crudo);\n\n  if (!r.success) {\n    // Sin esto, el error es irreproducible en producción.\n    registrar('contrato incumplido', { id, errores: r.error.issues, crudo });\n    throw new ContratoError(r.error);\n  }\n  return r.data;\n}\n```",
+      "complexity": "O(tamaño del payload). Para respuestas muy grandes conviene validar solo lo que se usa, o validar una muestra en producción y todo en desarrollo.",
+      "pitfalls": [
+        "Escribir la interfaz y el esquema por separado: divergen enseguida.",
+        "Usar `as Usuario` sobre res.json(): no comprueba nada y el error aparece lejos.",
+        "Fallar duro por un campo decorativo que falta.",
+        "No registrar el payload que causó el fallo: irreproducible.",
+        "Validar en cada capa interna: coste sin beneficio, los tipos ya lo garantizan."
+      ]
+    },
+    {
+      "id": "ts-e004",
+      "title": "Un tipo Result y su composición",
+      "difficulty": "medium",
+      "topic": "Errores",
+      "statement": "Implementa `Result<T, E>` con sus constructores y utilidades (`map`, `flatMap`, `unwrapOr`). Úsalo en un flujo con tres pasos que pueden fallar por causas distintas, y haz que añadir una causa nueva rompa la compilación donde haga falta.",
+      "hints": [
+        "Una unión discriminada con un campo booleano permite estrechar bien.",
+        "flatMap encadena operaciones que a su vez pueden fallar, sin anidar.",
+        "¿Cómo garantizas que un switch cubre todas las causas de error?"
+      ],
+      "approach": "La motivación: **TypeScript no tiene excepciones comprobadas**. `function login(): Promise<User>` no dice que puede fallar ni por qué. Esa información vive solo en la documentación, si es que alguien la escribió, y el compilador no obliga a nadie a tratarla.\n\nCon `Result`, el fallo **forma parte del tipo de retorno**. El llamador no puede ignorarlo: para llegar al valor tiene que pasar por la comprobación.\n\nEl diseño:\n- Una unión discriminada por un campo `ok` booleano. TypeScript estrecha perfectamente con `if (r.ok)`.\n- **`map`** transforma el valor si hay éxito y propaga el error si no.\n- **`flatMap`** (o `andThen`) encadena una operación que **también** puede fallar. Sin él, encadenar tres pasos da `Result<Result<Result<...>>>` y es inmanejable. Es la pieza que hace que el patrón escale.\n- Los errores como **sealed union** propia, no strings sueltos: así el `switch` es exhaustivo.\n\nLa propiedad valiosa aparece al **evolucionar**: si mañana añades `CuentaBloqueada` a la unión de errores, todos los `switch` exhaustivos **dejan de compilar** y el compilador te lleva a cada sitio que hay que actualizar. Con excepciones o con strings, ese caso nuevo caería en el `else` genérico y el usuario vería \"Error desconocido\".\n\nEl coste, que hay que reconocer: TypeScript no tiene azúcar para propagar errores (el `?` de Rust), así que encadenar es más verboso. Por eso el patrón encaja en los **límites entre capas** (repositorios, casos de uso) y no en cada función interna.\n\nY los errores del dominio se mantienen **sin textos de interfaz**: el mensaje que ve el usuario, y su traducción, es responsabilidad de la capa de presentación.",
+      "solutionSketch": "```ts\ntype Result<T, E> =\n  | { readonly ok: true; readonly valor: T }\n  | { readonly ok: false; readonly error: E };\n\nconst ok = <T>(valor: T): Result<T, never> => ({ ok: true, valor });\nconst err = <E>(error: E): Result<never, E> => ({ ok: false, error });\n\nfunction map<T, U, E>(r: Result<T, E>, f: (v: T) => U): Result<U, E> {\n  return r.ok ? ok(f(r.valor)) : r;\n}\n\n// La pieza clave: encadenar sin anidar Results.\nfunction flatMap<T, U, E, F>(\n  r: Result<T, E>,\n  f: (v: T) => Result<U, F>,\n): Result<U, E | F> {\n  return r.ok ? f(r.valor) : r;\n}\n\nconst unwrapOr = <T, E>(r: Result<T, E>, porDefecto: T): T =>\n  r.ok ? r.valor : porDefecto;\n\n// Errores del dominio, sin textos de UI dentro.\ntype ErrorCompra =\n  | { tipo: 'sinStock'; disponibles: number }\n  | { tipo: 'pagoRechazado'; codigo: string }\n  | { tipo: 'sinRed' };\n\nfunction comprar(id: string, n: number): Result<Pedido, ErrorCompra> {\n  return flatMap(verificarStock(id, n), (art) =>\n    flatMap(cobrar(art), (pago) => ok(crearPedido(art, pago))),\n  );\n}\n\n// Exhaustivo: añadir una causa rompe aquí, que es lo que quieres.\nfunction mensaje(e: ErrorCompra): string {\n  switch (e.tipo) {\n    case 'sinStock':      return `Solo quedan ${e.disponibles}`;\n    case 'pagoRechazado': return 'Tu banco rechazó el pago';\n    case 'sinRed':        return 'Sin conexión';\n  }\n}\n```",
+      "complexity": "Una asignación por resultado. El coste real es la verbosidad, no el rendimiento.",
+      "pitfalls": [
+        "Usar map donde hace falta flatMap: acabas con Result anidados.",
+        "Poner los textos de la interfaz dentro de los tipos de error: acopla el dominio al idioma.",
+        "Añadir un `default` al switch: anula la exhaustividad, que es el principal beneficio.",
+        "Usar Result en todas las funciones internas: la verbosidad deja de compensar.",
+        "Mezclar Result y excepciones para el mismo tipo de fallo sin una convención escrita."
+      ]
+    },
+    {
+      "id": "ts-e005",
+      "title": "Branded types para identificadores",
+      "difficulty": "medium",
+      "topic": "Modelado",
+      "statement": "Tu código pasa `string` para userId, orderId y email, y ya hubo un bug por intercambiar dos argumentos. Crea tipos que el compilador distinga, con coste cero en runtime y con la validación encapsulada.",
+      "hints": [
+        "Con tipado estructural, dos alias de string son el mismo tipo.",
+        "Una propiedad marcadora que no existe en runtime basta para distinguirlos.",
+        "¿Cómo garantizas que si tienes un Email, es válido?"
+      ],
+      "approach": "El problema tiene nombre: **primitive obsession**. `type UserId = string` y `type Email = string` son literalmente el mismo tipo para TypeScript, porque el sistema es estructural. `enviar(email, userId)` con los argumentos cambiados compila sin una queja, y el bug aparece en producción.\n\nLa técnica del **brand**: intersecar el primitivo con un objeto que lleva una propiedad marcadora. Esa propiedad **no existe en runtime** (nadie la asigna nunca): solo vive en el sistema de tipos, así que el valor sigue siendo un string normal, sin envoltorio ni asignación extra.\n\nUsar un `unique symbol` declarado (`declare const marca: unique symbol`) en vez de un string para la clave evita colisiones con propiedades reales y hace la marca inaccesible desde fuera.\n\nLa parte que convierte esto de un truco en una herramienta de diseño es el **constructor que valida**:\n\n```ts\nfunction email(v: string): Email { if (!valido(v)) throw ...; return v as Email; }\n```\n\nAhí está la única aserción de todo el sistema, encapsulada y justo al lado de la comprobación que la respalda. A partir de ese punto, **tener un `Email` es una garantía**: nadie tiene que volver a validarlo, y ninguna función defensiva necesita comprobarlo otra vez. Eso es lo que elimina código, no solo bugs.\n\nUn `safeEmail` que devuelva `Result` es mejor para datos de usuario, donde el fallo es esperable.\n\nDónde aplica más allá de los ids:\n- **Unidades**: `Centimos` frente a `Euros`, `Metros` frente a `Pies`. Un error de unidades tumbó una sonda de la NASA.\n- **Valores sanitizados**: `HtmlSeguro` frente a `string`. Si la función que inserta en el DOM solo acepta `HtmlSeguro`, **el compilador impide el XSS**.\n\nEl coste: en los bordes hay que construir, y eso se nota al deserializar. Aplícalo a los conceptos que de verdad se confunden, no a cada string.",
+      "solutionSketch": "```ts\ndeclare const marca: unique symbol;\ntype Brand<T, B extends string> = T & { readonly [marca]: B };\n\ntype UserId = Brand<string, 'UserId'>;\ntype OrderId = Brand<string, 'OrderId'>;\ntype Email = Brand<string, 'Email'>;\ntype Centimos = Brand<number, 'Centimos'>;\n\n// Único sitio con una aserción, justo donde está la comprobación.\nfunction email(valor: string): Email {\n  const limpio = valor.trim().toLowerCase();\n  if (!/^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$/.test(limpio)) {\n    throw new Error(`Email inválido: ${valor}`);\n  }\n  return limpio as Email;\n}\n\n// Versión no lanzadora, para entrada de usuario.\nfunction parseEmail(valor: string): Result<Email, 'formato'> {\n  try { return ok(email(valor)); } catch { return err('formato'); }\n}\n\nconst userId = (v: string) => v as UserId;   // id opaco: nada que validar\n\nfunction enviarFactura(a: Email, de: UserId, total: Centimos) { }\n\nconst e = email('ana@ejemplo.com');\nconst u = userId('u-42');\nenviarFactura(e, u, 1999 as Centimos);\n// enviarFactura(u, e, 19.99);   // error: los tres argumentos no encajan\n```",
+      "complexity": "Coste cero en runtime: la marca se borra al compilar y el valor sigue siendo un primitivo. La validación es O(longitud) y solo en la construcción.",
+      "pitfalls": [
+        "Usar `as` para construir el tipo por todo el código en vez de encapsularlo en un constructor: pierdes la garantía.",
+        "Usar una clave string para la marca: puede colisionar con una propiedad real.",
+        "Esperar comprobación en runtime: el brand no existe al ejecutar.",
+        "Aplicarlo a cada string del programa: las conversiones en los bordes se vuelven ruido.",
+        "Olvidar que JSON.parse devuelve strings sin marcar: hay que reconstruir al deserializar."
+      ]
+    },
+    {
+      "id": "ts-e006",
+      "title": "Cliente de API tipado desde una tabla de rutas",
+      "difficulty": "hard",
+      "topic": "Tipos avanzados",
+      "statement": "Diseña un cliente donde `api('GET /users/:id', { params: { id } })` esté completamente tipado: el endpoint autocompleta, los parámetros de ruta salen del string, el body solo se exige en métodos que lo llevan, y el retorno es el tipo correcto.",
+      "hints": [
+        "Los parámetros de ruta se pueden extraer del string con template literal types e infer.",
+        "Un tipo condicional puede hacer que 'body' sea obligatorio u opcional según el método.",
+        "¿Dónde pondrías el límite entre magia de tipos y algo mantenible?"
+      ],
+      "approach": "Tres piezas encajan aquí.\n\n**1. El registro de endpoints como fuente de verdad.** Un objeto (o tipo) que mapea `'MÉTODO /ruta'` a su respuesta y su body. Todo lo demás se deriva de él, así que añadir un endpoint es una línea y el cliente se actualiza solo.\n\n**2. Extraer los parámetros del string de la ruta.** Un template literal type recursivo con `infer` recorre `'/users/:id/posts/:postId'` y produce `'id' | 'postId'`. Esto es lo que permite que el objeto `params` esté tipado sin declararlo dos veces, y que olvidar un parámetro falle al compilar.\n\n**3. Argumentos condicionales.** Un tipo condicional decide si `body` es obligatorio: si el endpoint declara body, se exige; si no, ni siquiera se permite. Y si la ruta no tiene parámetros, `params` no debe pedirse. El truco para que el segundo argumento desaparezca del todo cuando no hace falta es un **parámetro rest tipado con una tupla condicional**: `...args: [] | [Opciones]`.\n\nDos detalles que marcan la diferencia en una implementación real:\n- **Validar la respuesta** aunque el tipo diga lo que diga. El tipo es una declaración de intenciones sobre lo que el servidor *debería* devolver; Zod comprueba lo que devuelve.\n- **Construir la URL sustituyendo los params** y codificando con `encodeURIComponent`, o tienes un bug de inyección en cuanto un id lleva una barra.\n\nY la pregunta de criterio, que forma parte del ejercicio: **¿merece la pena?** Esto da un autocompletado excelente y hace imposible llamar a un endpoint inexistente o olvidar un parámetro. También añade tipos que solo entiende quien los escribió y coste de compilación en cada pulsación.\n\nLa respuesta honesta: si el registro lo **generas** desde OpenAPI, sí, porque nadie mantiene los tipos a mano. Si lo escribes y mantienes tú, probablemente un cliente con funciones explícitas por endpoint (`getUser(id)`) sea más aburrido y mejor ingeniería.",
+      "solutionSketch": "```ts\n// 1. Registro: la única fuente de verdad.\ninterface Endpoints {\n  'GET /users/:id': { respuesta: Usuario };\n  'GET /users/:id/posts/:postId': { respuesta: Post };\n  'POST /users': { body: NuevoUsuario; respuesta: Usuario };\n  'DELETE /users/:id': { respuesta: void };\n}\n\n// 2. Parámetros extraídos del propio string de la ruta.\ntype Params<R extends string> =\n  R extends `${string}:${infer P}/${infer Resto}`\n    ? P | Params<`/${Resto}`>\n    : R extends `${string}:${infer P}`\n      ? P\n      : never;\n\ntype ParamsDe<E extends keyof Endpoints> =\n  Params<E> extends never ? {} : { params: Record<Params<E>, string> };\n\ntype BodyDe<E extends keyof Endpoints> =\n  Endpoints[E] extends { body: infer B } ? { body: B } : {};\n\ntype Opciones<E extends keyof Endpoints> = ParamsDe<E> & BodyDe<E>;\n\n// El rest tipado hace desaparecer el argumento cuando no hace falta.\ntype Args<E extends keyof Endpoints> =\n  keyof Opciones<E> extends never ? [] : [Opciones<E>];\n\nasync function api<E extends keyof Endpoints>(\n  endpoint: E,\n  ...args: Args<E>\n): Promise<Endpoints[E]['respuesta']> {\n  const [metodo, plantilla] = endpoint.split(' ') as [string, string];\n  const opciones = (args[0] ?? {}) as { params?: Record<string, string>; body?: unknown };\n\n  const url = plantilla.replace(/:(\\w+)/g, (_, k) =>\n    encodeURIComponent(opciones.params![k]),   // codificar o hay inyección\n  );\n\n  const res = await fetch(url, {\n    method: metodo,\n    body: opciones.body ? JSON.stringify(opciones.body) : undefined,\n    headers: opciones.body ? { 'Content-Type': 'application/json' } : undefined,\n  });\n  if (!res.ok) throw new ApiError(res.status);\n\n  // El tipo dice lo que DEBERÍA venir; esto comprueba lo que viene.\n  return esquemas[endpoint].parse(await res.json());\n}\n\napi('GET /users/:id', { params: { id: '1' } });          // Promise<Usuario>\napi('POST /users', { body: { nombre: 'Ana' } });          // Promise<Usuario>\n// api('GET /users/:id');                                  // error: faltan params\n// api('GET /nope');                                       // error: no existe\n```",
+      "complexity": "Runtime: una llamada y un parseo. Compilación: los tipos recursivos sobre el registro crecen con el número de endpoints y la longitud de las rutas.",
+      "pitfalls": [
+        "Confiar en el tipo declarado y no validar la respuesta: el servidor puede devolver otra cosa.",
+        "No codificar los parámetros al sustituirlos en la URL.",
+        "Tipos tan recursivos que el editor se arrastra en un proyecto con cien endpoints.",
+        "Mantener el registro a mano: se desincroniza con el backend. Generarlo desde OpenAPI.",
+        "Construir esta maquinaria cuando funciones explícitas por endpoint habrían bastado."
+      ]
+    },
+    {
+      "id": "ts-e007",
+      "title": "Utilidades de tipos y su comportamiento con uniones",
+      "difficulty": "hard",
+      "topic": "Tipos avanzados",
+      "statement": "Implementa `DeepPartial<T>`, `DeepReadonly<T>` y `RequireAtLeastOne<T, K>`. Explica por qué las dos primeras se comportan mal con arrays, funciones y uniones, y corrígelas.",
+      "hints": [
+        "T extends object es cierto también para arrays y funciones.",
+        "Un conditional type con un genérico desnudo se distribuye sobre las uniones.",
+        "Date, Map y Set también son object y no quieres recorrerlos."
+      ],
+      "approach": "La versión ingenua de `DeepPartial` se escribe en dos líneas y es incorrecta de tres formas distintas. Entender por qué es más valioso que el tipo en sí.\n\n**1. `T extends object` incluye más de lo que crees.** Arrays, funciones, `Date`, `Map`, `Set`, `RegExp`: todos son `object`. Aplicar el mapeo a un array convierte `string[]` en un objeto con las claves de Array (`length`, `map`, ...) hechas opcionales, que es un disparate. A una función la destruye por completo. Y a un `Date` le hace opcionales sus métodos.\n\nHay que tratar los casos especiales **en orden**: funciones primero, luego arrays, luego los tipos nativos que no quieres recorrer, y solo entonces el mapeo genérico.\n\n**2. La distributividad sobre uniones.** Cuando un conditional type comprueba un parámetro genérico **desnudo** (`T extends ...`), TypeScript lo aplica a cada miembro de la unión por separado. A veces es lo que quieres; con `DeepPartial<A | B>` produce `DeepPartial<A> | DeepPartial<B>`, que suele estar bien. Pero en otros tipos no lo está, y se desactiva envolviendo en tuplas: `[T] extends [U]`. Saber activarla y desactivarla a voluntad es lo que distingue a quien entiende conditional types de quien los copia.\n\n**3. Las uniones dentro de propiedades** se recorren sin problema, pero conviene comprobarlo, porque es donde fallan muchas implementaciones publicadas.\n\n`RequireAtLeastOne` es un caso distinto y muy práctico: \"pasa `email` o `telefono`, pero al menos uno\". Se construye con un mapped type que genera, para cada clave, la variante donde esa clave es obligatoria y el resto opcionales, y luego une todas. Es el ejemplo perfecto de una invariante de negocio expresada en el sistema de tipos, y se pide en formularios constantemente.\n\nY el aviso final: estos tipos existen ya en `type-fest`, probados contra casos que tú no vas a considerar. Escribirlos una vez sirve para entender el lenguaje; usarlos en producción rara vez se justifica.",
+      "solutionSketch": "```ts\n// Tipos nativos que NO queremos recorrer.\ntype Primitivo = string | number | boolean | bigint | symbol | null | undefined;\ntype NoRecorrer = Primitivo | Date | RegExp | ((...a: never[]) => unknown);\n\ntype DeepPartial<T> = T extends NoRecorrer\n  ? T\n  : T extends readonly (infer E)[]\n    ? DeepPartial<E>[]                       // array: mapear el elemento\n    : T extends Map<infer K, infer V>\n      ? Map<K, DeepPartial<V>>\n      : T extends Set<infer E>\n        ? Set<DeepPartial<E>>\n        : { [K in keyof T]?: DeepPartial<T[K]> };\n\ntype DeepReadonly<T> = T extends NoRecorrer\n  ? T\n  : T extends readonly (infer E)[]\n    ? readonly DeepReadonly<E>[]\n    : { readonly [K in keyof T]: DeepReadonly<T[K]> };\n\n// Desactivar la distributividad envolviendo en tuplas.\ntype EsUnion<T, U = T> = [T] extends [U]\n  ? false\n  : true;\n\n// \"Al menos una de estas claves\": invariante de negocio en el tipo.\ntype RequireAtLeastOne<T, K extends keyof T = keyof T> = Omit<T, K> &\n  { [P in K]-?: Required<Pick<T, P>> & Partial<Omit<T, P>> }[K];\n\ninterface Contacto {\n  nombre: string;\n  email?: string;\n  telefono?: string;\n}\n\ntype ContactoValido = RequireAtLeastOne<Contacto, 'email' | 'telefono'>;\n\nconst a: ContactoValido = { nombre: 'Ana', email: 'a@b.com' };   // ok\nconst b: ContactoValido = { nombre: 'Ana', telefono: '600' };    // ok\n// const c: ContactoValido = { nombre: 'Ana' };                   // error\n```",
+      "complexity": "Sin coste en runtime. En compilación, la recursión crece con la profundidad y puede alcanzar el límite de instanciación en estructuras muy anidadas.",
+      "pitfalls": [
+        "Usar T extends object sin excluir arrays, funciones, Date, Map y Set.",
+        "Ignorar la distributividad y obtener resultados distintos de los esperados con uniones.",
+        "No manejar tuplas: se convierten en arrays y se pierde la longitud.",
+        "Recursión sin caso base sobre tipos recursivos: error de profundidad excesiva.",
+        "Reimplementarlos en producción cuando type-fest ya los tiene bien resueltos."
+      ]
+    },
+    {
+      "id": "ts-e008",
+      "title": "Máquina de estados tipada por transiciones",
+      "difficulty": "hard",
+      "topic": "Modelado",
+      "statement": "Modela el ciclo de vida de un pedido (borrador → pagado → enviado → entregado, con cancelación) de forma que **intentar una transición inválida no compile**. Sin librerías.",
+      "hints": [
+        "Cada estado puede ser un tipo distinto con los datos que solo existen en él.",
+        "Una función de transición puede aceptar solo el estado de partida correcto.",
+        "¿Cómo lo haces cuando el estado viene de la base de datos y no sabes cuál es?"
+      ],
+      "approach": "Hay dos niveles de rigor y conviene saber cuándo usar cada uno.\n\n**Nivel 1: unión discriminada.** Cada estado lleva exactamente los datos que existen en él. Un pedido `'borrador'` no tiene fecha de pago, y `'pagado'` la tiene garantizada. Esto ya elimina la mitad de los bugs: se acaban los campos opcionales que \"solo existen si el estado es X\" y los `!` para convencer al compilador.\n\n**Nivel 2: transiciones en las firmas.** Cada función acepta **solo** el tipo del estado de partida:\n\n```ts\nfunction enviar(p: PedidoPagado): PedidoEnviado\n```\n\nLlamar a `enviar(pedidoCancelado)` **no compila**. La regla de negocio deja de ser algo que hay que recordar comprobar y pasa a ser algo que el compilador impone. Y como cada función devuelve el estado siguiente, el flujo se encadena de forma natural.\n\nAdemás se puede declarar la tabla de transiciones válidas como un tipo, y derivar de ella qué acciones son posibles desde cada estado. Eso permite que la UI pregunte \"¿qué botones muestro?\" al sistema de tipos en vez de a un `if` duplicado.\n\n**El problema real** es el que plantea la última pregunta: cuando el pedido viene de la base de datos, en tiempo de compilación **no sabes** en qué estado está. Es solo un `Pedido` (la unión completa).\n\nAhí la respuesta correcta no es un `as`. Es un `switch` sobre el discriminante: dentro de cada rama, TypeScript **estrecha** al tipo concreto y puedes llamar a las transiciones válidas de ese estado. El estrechamiento es el puente entre el mundo dinámico (el dato) y el estático (las garantías).\n\nY la aplicación práctica más útil: un `Record` de acciones disponibles por estado permite que la UI derive los botones del mismo modelo, con lo que es imposible que la interfaz ofrezca una acción que el dominio rechazará.",
+      "solutionSketch": "```ts\ninterface Base { id: string; items: Item[] }\n\ninterface PedidoBorrador   extends Base { estado: 'borrador' }\ninterface PedidoPagado     extends Base { estado: 'pagado'; pago: Pago; pagadoEn: Date }\ninterface PedidoEnviado    extends Base { estado: 'enviado'; pago: Pago; seguimiento: string }\ninterface PedidoEntregado  extends Base { estado: 'entregado'; entregadoEn: Date }\ninterface PedidoCancelado  extends Base { estado: 'cancelado'; motivo: string }\n\ntype Pedido =\n  | PedidoBorrador | PedidoPagado | PedidoEnviado\n  | PedidoEntregado | PedidoCancelado;\n\n// Las transiciones válidas viven en las firmas.\nfunction pagar(p: PedidoBorrador, pago: Pago): PedidoPagado {\n  return { ...p, estado: 'pagado', pago, pagadoEn: new Date() };\n}\n\nfunction enviar(p: PedidoPagado, seguimiento: string): PedidoEnviado {\n  return { ...p, estado: 'enviado', seguimiento };\n}\n\nfunction entregar(p: PedidoEnviado): PedidoEntregado {\n  return { ...p, estado: 'entregado', entregadoEn: new Date() };\n}\n\n// Solo se puede cancelar lo que aún no salió.\nfunction cancelar(p: PedidoBorrador | PedidoPagado, motivo: string): PedidoCancelado {\n  return { ...p, estado: 'cancelado', motivo };\n}\n\n// const x = enviar(pedidoCancelado, 'ABC');   // no compila\n\n// El puente con el mundo dinámico: estrechar, no asertar.\nfunction accionesDisponibles(p: Pedido): string[] {\n  switch (p.estado) {\n    case 'borrador':  return ['pagar', 'cancelar'];\n    case 'pagado':    return ['enviar', 'cancelar'];\n    case 'enviado':   return ['entregar'];\n    case 'entregado':\n    case 'cancelado': return [];\n  }\n}\n\nfunction manejar(p: Pedido, pago: Pago): Pedido {\n  switch (p.estado) {\n    case 'borrador': return pagar(p, pago);      // p es PedidoBorrador aquí\n    case 'pagado':   return enviar(p, 'ABC');    // p es PedidoPagado aquí\n    default:         return p;\n  }\n}\n```",
+      "complexity": "Sin coste en runtime. El beneficio es que una clase entera de errores deja de ser posible.",
+      "pitfalls": [
+        "Un único tipo con campos opcionales para todos los estados: vuelven los `!` y los estados imposibles.",
+        "Usar `as` para forzar el estado al leer de la base de datos, en vez de estrechar con un switch.",
+        "Duplicar la tabla de transiciones en la UI: acaba ofreciendo acciones que el dominio rechaza.",
+        "Olvidar que el dato persistido puede tener un estado que el código ya no conoce: hay que validarlo al cargar.",
+        "Llevarlo tan lejos que una transición nueva obligue a tocar quince firmas."
+      ]
+    },
+    {
+      "id": "ts-e009",
+      "title": "Tipar un event emitter con mapa de eventos",
+      "difficulty": "medium",
+      "topic": "Genéricos",
+      "statement": "Tipa un `EventEmitter` de forma que `on('usuario:creado', cb)` sepa qué argumentos recibe el callback, que `emit` exija los argumentos correctos, y que un nombre de evento inexistente no compile.",
+      "hints": [
+        "Un interface que mapee nombre de evento a tupla de argumentos.",
+        "keyof da los nombres válidos; el acceso indexado, los argumentos.",
+        "Un parámetro rest tipado con una tupla permite exigir exactamente esos argumentos."
+      ],
+      "approach": "La clave es el **mapa de eventos**: una interfaz que asocia cada nombre a la **tupla** de argumentos de su callback.\n\n```ts\ninterface Eventos {\n  'usuario:creado': [usuario: Usuario];\n  'pedido:pagado': [pedidoId: string, total: number];\n  'app:cerrada': [];\n}\n```\n\nCon eso, tres cosas salen solas:\n- `K extends keyof Eventos` restringe los nombres válidos, y el editor los autocompleta.\n- El callback se tipa como `(...args: Eventos[K]) => void`, así que sus parámetros vienen dados.\n- En `emit`, un **parámetro rest tipado con la tupla** (`...args: Eventos[K]`) exige exactamente esos argumentos: ni de más, ni de menos, ni en otro orden.\n\nUsar tuplas **con etiquetas** (`[usuario: Usuario]`) mejora mucho el autocompletado: el editor muestra el nombre del parámetro, no solo su tipo.\n\nLa extensibilidad se resuelve con **declaration merging**: si `Eventos` es una `interface` exportada, otro módulo puede añadir sus propios eventos declarándola de nuevo. Es exactamente el caso donde `interface` gana a `type`, y es cómo lo hacen las librerías reales.\n\nY lo que hay que cuidar en la implementación, más allá de los tipos:\n- **`on` devuelve la función de baja.** Es mejor API que obligar a guardar la referencia exacta para `off`, y encaja directamente con la limpieza de un `useEffect`.\n- **Iterar sobre una copia en `emit`**: un listener que se da de baja a sí mismo durante la emisión corrompe el recorrido.\n- **Aislar los errores**: si un listener lanza, los siguientes deben ejecutarse igual.\n\nEl internal usa `any` en el `Map`, y es correcto: está encapsulado, no se filtra al exterior, y la API pública es completamente segura. Es el lugar legítimo de un `any`: dentro, no fuera.",
+      "solutionSketch": "```ts\n// Extensible por declaration merging desde otros módulos.\nexport interface Eventos {\n  'usuario:creado': [usuario: Usuario];\n  'pedido:pagado': [pedidoId: string, total: number];\n  'app:cerrada': [];\n}\n\ntype Listener<K extends keyof Eventos> = (...args: Eventos[K]) => void;\n\nexport class Emisor {\n  // any encapsulado: la API pública sigue siendo segura.\n  #listeners = new Map<keyof Eventos, Set<(...a: any[]) => void>>();\n\n  on<K extends keyof Eventos>(evento: K, fn: Listener<K>): () => void {\n    if (!this.#listeners.has(evento)) this.#listeners.set(evento, new Set());\n    this.#listeners.get(evento)!.add(fn);\n    return () => this.off(evento, fn);\n  }\n\n  once<K extends keyof Eventos>(evento: K, fn: Listener<K>): () => void {\n    const envoltorio = ((...args: Eventos[K]) => {\n      this.off(evento, envoltorio);   // antes de invocar, por si lanza\n      fn(...args);\n    }) as Listener<K>;\n    return this.on(evento, envoltorio);\n  }\n\n  off<K extends keyof Eventos>(evento: K, fn: Listener<K>): void {\n    const set = this.#listeners.get(evento);\n    if (!set) return;\n    set.delete(fn);\n    if (set.size === 0) this.#listeners.delete(evento);\n  }\n\n  emit<K extends keyof Eventos>(evento: K, ...args: Eventos[K]): void {\n    // Copia: un listener puede darse de baja durante la emisión.\n    for (const fn of [...(this.#listeners.get(evento) ?? [])]) {\n      try {\n        fn(...args);\n      } catch (e) {\n        queueMicrotask(() => { throw e; });   // no tumbar a los demás\n      }\n    }\n  }\n}\n\nconst bus = new Emisor();\nbus.on('pedido:pagado', (id, total) => { });   // id: string, total: number\nbus.emit('pedido:pagado', 'p-1', 1999);\n// bus.emit('pedido:pagado', 'p-1');            // error: falta total\n// bus.on('inexistente', () => {});              // error: evento desconocido\n```",
+      "complexity": "O(1) para on y off; O(n) para emit sobre n listeners, más la copia defensiva.",
+      "pitfalls": [
+        "Tipar los argumentos como any[]: pierdes todo el valor del ejercicio.",
+        "Usar un type en vez de interface para el mapa: impides que otros módulos añadan eventos.",
+        "Iterar la lista original en emit: se rompe si un listener se da de baja.",
+        "No aislar las excepciones: un listener roto impide que se ejecuten los siguientes.",
+        "Un bus global que nadie limpia: fuente clásica de fugas de memoria."
+      ]
+    },
+    {
+      "id": "ts-e010",
+      "title": "Migrar un módulo de JavaScript a TypeScript estricto",
+      "difficulty": "medium",
+      "topic": "Migración",
+      "statement": "Migra este módulo a TypeScript con `strict` activado. Lista los problemas que aparecen y resuélvelos sin usar `any` ni `as`.\n\n```js\nexport function agrupar(items, clave) {\n  return items.reduce((acc, item) => {\n    const k = item[clave];\n    if (!acc[k]) acc[k] = [];\n    acc[k].push(item);\n    return acc;\n  }, {});\n}\n\nexport async function cargarConfig(ruta) {\n  const texto = await fs.readFile(ruta, 'utf8');\n  const config = JSON.parse(texto);\n  return { ...DEFAULTS, ...config };\n}\n```",
+      "hints": [
+        "¿Qué tipo tiene el acumulador vacío de reduce?",
+        "JSON.parse devuelve any. ¿Cómo cortas esa propagación?",
+        "¿Qué garantiza que item[clave] sirva como clave de objeto?"
+      ],
+      "approach": "Son dos funciones pequeñas y cada una tiene tres problemas distintos. Es un buen resumen de lo que aparece al migrar de verdad.\n\n**`agrupar`:**\n\n1. **El acumulador es `{}`**, que TypeScript infiere como `{}` y no permite indexar. Hay que anotar el tipo del acumulador en el genérico de `reduce`: `reduce<Record<string, T[]>>`.\n2. **`clave` no está restringida.** Debe ser `K extends keyof T`, o se puede pedir cualquier string.\n3. **`item[clave]` puede no ser usable como clave.** Si es un objeto, JavaScript lo convierte con `toString()` y agrupa todo bajo `[object Object]` silenciosamente. Se restringe con `T[K] extends PropertyKey`.\n4. **`acc[k]` es `T[] | undefined`** con `noUncheckedIndexedAccess`. El patrón `if (!acc[k]) acc[k] = []` no le basta al compilador; usar una variable local sí.\n\n**`cargarConfig`:**\n\n1. **`JSON.parse` devuelve `any`**, y ese `any` se propaga al retorno y de ahí a todo el que lo use. Es el punto exacto donde hay que cortar: validar con Zod y derivar el tipo del esquema.\n2. **El spread de dos objetos** hace que el retorno sea la unión de propiedades, pero sin validar `config` no hay ninguna garantía de que sus claves sean las esperadas.\n3. **Errores**: `readFile` lanza si el fichero no existe, y `JSON.parse` si el contenido no es JSON. Con `strict`, la variable del `catch` es `unknown` y hay que estrecharla.\n\nEl principio que resume el ejercicio: **`any` entra por los bordes** (`JSON.parse`, `fetch`, `localStorage`, librerías sin tipar) y se propaga hacia dentro. Migrar bien consiste en **poner una barrera de validación justo en esos puntos**, no en repartir anotaciones por el resto del código.",
+      "solutionSketch": "```ts\nimport { z } from 'zod';\n\n// 1. agrupar: genéricos restringidos y acumulador tipado.\nexport function agrupar<T, K extends keyof T>(\n  items: readonly T[],                 // readonly: no vamos a mutarlo\n  clave: K & (T[K] extends PropertyKey ? K : never),\n): Record<string, T[]> {\n  return items.reduce<Record<string, T[]>>((acc, item) => {\n    const k = String(item[clave]);\n    // Variable local: el compilador sí puede estrechar esto.\n    const grupo = acc[k] ?? [];\n    grupo.push(item);\n    acc[k] = grupo;\n    return acc;\n  }, {});\n}\n\n// 2. cargarConfig: cortar el any justo donde entra.\nconst Config = z.object({\n  puerto: z.number().int().positive().default(3000),\n  host: z.string().default('localhost'),\n  debug: z.boolean().default(false),\n});\n\nexport type Config = z.infer<typeof Config>;\n\nexport async function cargarConfig(ruta: string): Promise<Config> {\n  let texto: string;\n  try {\n    texto = await fs.readFile(ruta, 'utf8');\n  } catch (e) {\n    if (e instanceof Error && 'code' in e && e.code === 'ENOENT') {\n      return Config.parse({});          // sin fichero: solo defaults\n    }\n    throw e;\n  }\n\n  let crudo: unknown;                   // unknown, no any\n  try {\n    crudo = JSON.parse(texto);\n  } catch {\n    throw new Error(`Config inválida en ${ruta}: no es JSON`);\n  }\n\n  // Aquí muere el any: a partir de este punto todo está tipado.\n  return Config.parse(crudo);\n}\n```",
+      "complexity": "agrupar: O(n) en una pasada. cargarConfig: O(tamaño del fichero) por la lectura y el parseo.",
+      "pitfalls": [
+        "Anotar el acumulador como any para que compile: el retorno queda sin tipo y contamina a los consumidores.",
+        "No restringir la clave a keyof T: se acepta cualquier string.",
+        "Agrupar por una propiedad que es un objeto y obtener todo bajo '[object Object]'.",
+        "Dejar que el any de JSON.parse se propague al retorno en vez de cortarlo con validación.",
+        "Capturar el error de readFile sin distinguir 'no existe' de un fallo real de disco."
+      ]
+    }
+  ],
+  "roadmap": {
+    "stages": [
+      {
+        "id": "ts-s1",
+        "level": "junior",
+        "title": "Etapa 1 · Tipar lo que ya sabes escribir",
+        "estimatedWeeks": 8,
+        "goal": "Escribir TypeScript con soltura sin pelearte con el compilador. El requisito de entrada es saber JavaScript: TypeScript no lo sustituye, lo anota. Quien llega aquí sin base de JavaScript confunde errores del lenguaje con errores de tipos y se atasca.",
+        "skills": [
+          "Tipos básicos",
+          "Interfaces y type",
+          "Uniones",
+          "Genéricos simples",
+          "tsconfig",
+          "Utility types"
+        ],
+        "milestones": [
+          {
+            "id": "ts-m101",
+            "title": "strict desde el primer proyecto",
+            "detail": "Empieza con strict activado. Aprender con él cuesta un poco más al principio y ahorra meses de migración después. Y si ya sabes JavaScript, la mitad de los errores que te dé serán bugs reales."
+          },
+          {
+            "id": "ts-m102",
+            "title": "Cero any en un proyecto entero",
+            "detail": "Ponte la regla no-explicit-any y respétala. Cada vez que quieras poner any, usa unknown y estrecha. Es el ejercicio que más te enseña sobre el sistema de tipos."
+          },
+          {
+            "id": "ts-m103",
+            "title": "Modela con uniones discriminadas",
+            "detail": "Coge una pantalla con estados de carga, error y datos, y modélala con una unión. Cuenta cuántos estados imposibles permitía tu versión anterior."
+          },
+          {
+            "id": "ts-m104",
+            "title": "Genéricos con criterio",
+            "detail": "Escribe media docena de funciones genéricas útiles. Y aprende a detectar cuándo un genérico sobra: si el parámetro de tipo aparece una sola vez en la firma, no relaciona nada."
+          },
+          {
+            "id": "ts-m105",
+            "title": "Lee los tipos de una librería",
+            "detail": "Abre los .d.ts de algo que uses a diario. Es la mejor forma de ver cómo se tipan APIs reales, y de perderle el miedo a los tipos que parecen complicados."
+          }
+        ],
+        "resources": [
+          {
+            "title": "TypeScript Handbook",
+            "url": "https://www.typescriptlang.org/docs/handbook/intro.html",
+            "kind": "docs"
+          },
+          {
+            "title": "Total TypeScript: Beginners",
+            "url": "https://www.totaltypescript.com/books/total-typescript-essentials",
+            "kind": "course"
+          },
+          {
+            "title": "type-challenges",
+            "url": "https://github.com/type-challenges/type-challenges",
+            "kind": "repo"
+          },
+          {
+            "title": "TypeScript Playground",
+            "url": "https://www.typescriptlang.org/play",
+            "kind": "docs"
+          }
+        ],
+        "readinessSignals": [
+          "Lees un error del compilador y sabes hacia dónde mirar.",
+          "No necesitas any para que el proyecto compile.",
+          "Distingues cuándo un error de tipos señala un bug real y cuándo un modelo mal planteado."
+        ]
+      },
+      {
+        "id": "ts-s2",
+        "level": "junior",
+        "title": "Etapa 2 · La frontera: tipos frente a realidad",
+        "estimatedWeeks": 12,
+        "goal": "Interiorizar que los tipos se borran al compilar, y diseñar en consecuencia. Es el salto conceptual que más gente se salta, y el origen de casi todos los errores de tipo que llegan a producción.",
+        "skills": [
+          "Validación en runtime",
+          "Manejo de errores",
+          "Tipos derivados",
+          "Testing tipado",
+          "Declaraciones de terceros"
+        ],
+        "milestones": [
+          {
+            "id": "ts-m201",
+            "title": "Valida todo lo que entra",
+            "detail": "Coge un proyecto y pon Zod en cada frontera: respuestas de API, localStorage, parámetros de URL, variables de entorno. Deriva los tipos del esquema con z.infer, nunca al revés."
+          },
+          {
+            "id": "ts-m202",
+            "title": "Elimina los tipos duplicados",
+            "detail": "Busca en tu proyecto tipos que se puedan derivar con Pick, Omit o z.infer y no estén derivados. Cada duplicado es un futuro desajuste."
+          },
+          {
+            "id": "ts-m203",
+            "title": "Tipa una librería sin tipos",
+            "detail": "Escribe un .d.ts para algo que uses. Tipa solo lo que necesitas, no la librería entera. Si queda bien, contribúyelo a DefinitelyTyped."
+          },
+          {
+            "id": "ts-m204",
+            "title": "Errores como valores",
+            "detail": "Implementa un tipo Result y úsalo en una capa completa. Comprueba qué se siente cuando añadir una causa de error nueva rompe la compilación justo donde hay que actualizar."
+          },
+          {
+            "id": "ts-m205",
+            "title": "Tests con los mismos tipos",
+            "detail": "Que los tests estén bajo la misma configuración estricta que el código. Escribe factorías con Partial en vez de mocks con as."
+          }
+        ],
+        "resources": [
+          {
+            "title": "Zod",
+            "url": "https://zod.dev/",
+            "kind": "docs"
+          },
+          {
+            "title": "type-fest",
+            "url": "https://github.com/sindresorhus/type-fest",
+            "kind": "repo"
+          },
+          {
+            "title": "DefinitelyTyped contribution guide",
+            "url": "https://github.com/DefinitelyTyped/DefinitelyTyped#how-can-i-contribute",
+            "kind": "docs"
+          },
+          {
+            "title": "typescript-eslint rules",
+            "url": "https://typescript-eslint.io/rules/",
+            "kind": "docs"
+          }
+        ],
+        "readinessSignals": [
+          "Nunca escribes `as` sobre el resultado de un fetch.",
+          "Tus tipos se derivan de una sola fuente en vez de copiarse.",
+          "Distingues qué validar en runtime y qué basta con tipar."
+        ]
+      },
+      {
+        "id": "ts-s3",
+        "level": "mid",
+        "title": "Etapa 3 · El sistema de tipos como herramienta",
+        "estimatedWeeks": 20,
+        "goal": "Usar los tipos para expresar reglas de negocio y no solo formas de datos. Aquí se aprende también lo contrario: dónde el sistema no llega y forzarlo sale caro.",
+        "skills": [
+          "Conditional y mapped types",
+          "Inferencia",
+          "Modelado de dominio",
+          "Rendimiento de compilación",
+          "Contratos con el backend"
+        ],
+        "milestones": [
+          {
+            "id": "ts-m301",
+            "title": "Resuelve type-challenges",
+            "detail": "Los de nivel medio y difícil. Es el gimnasio del sistema de tipos: te obliga a entender distributividad, infer y recursión de verdad, no de oídas."
+          },
+          {
+            "id": "ts-m302",
+            "title": "Estados imposibles, irrepresentables",
+            "detail": "Coge el modelo de dominio más enrevesado de tu proyecto y remodélalo con uniones discriminadas y transiciones en las firmas. Mide cuántas comprobaciones defensivas desaparecen."
+          },
+          {
+            "id": "ts-m303",
+            "title": "Genera tipos desde el backend",
+            "detail": "Monta generación desde OpenAPI, GraphQL o tRPC, integrada en el build. Comprueba que un cambio incompatible en el servidor rompe el build del cliente."
+          },
+          {
+            "id": "ts-m304",
+            "title": "Perfila la compilación",
+            "detail": "Usa tsc --generateTrace en un proyecto real y encuentra el tipo que está costando segundos. Casi siempre hay uno solo responsable de casi todo."
+          },
+          {
+            "id": "ts-m305",
+            "title": "Escribe utilidades de tipos propias",
+            "detail": "DeepPartial, RequireAtLeastOne y compañía, con sus casos borde: arrays, funciones, Date, uniones. Entender por qué la versión ingenua falla vale más que el tipo final."
+          },
+          {
+            "id": "ts-m306",
+            "title": "Branded types en producción",
+            "detail": "Aplícalos a identificadores o unidades en una zona real del código. Comprueba cuántos bugs de argumentos intercambiados eran posibles antes."
+          }
+        ],
+        "resources": [
+          {
+            "title": "Total TypeScript",
+            "url": "https://www.totaltypescript.com/",
+            "kind": "course"
+          },
+          {
+            "title": "TypeScript performance wiki",
+            "url": "https://github.com/microsoft/TypeScript/wiki/Performance",
+            "kind": "docs"
+          },
+          {
+            "title": "Effective TypeScript — Dan Vanderkam",
+            "url": "https://effectivetypescript.com/",
+            "kind": "book"
+          },
+          {
+            "title": "tRPC",
+            "url": "https://trpc.io/docs",
+            "kind": "docs"
+          },
+          {
+            "title": "TypeScript release notes",
+            "url": "https://www.typescriptlang.org/docs/handbook/release-notes/overview.html",
+            "kind": "docs"
+          }
+        ],
+        "readinessSignals": [
+          "Modelas el dominio en tipos antes de escribir la lógica.",
+          "Sabes por qué un tipo es lento y cómo arreglarlo.",
+          "Reconoces cuándo un tipo ingenioso no compensa su mantenimiento."
+        ]
+      },
+      {
+        "id": "ts-s4",
+        "level": "senior",
+        "title": "Etapa 4 · Criterio: tipos como decisión de equipo",
+        "estimatedWeeks": 36,
+        "goal": "Decidir cuánto tipado necesita cada parte del sistema, y sostener esa decisión en un equipo a lo largo de años. El salto no es saber más tipos: es saber cuándo no usarlos.",
+        "skills": [
+          "Diseño de APIs públicas",
+          "Monorepos y escala",
+          "Migraciones",
+          "Estándares de equipo",
+          "Decisiones técnicas"
+        ],
+        "milestones": [
+          {
+            "id": "ts-m401",
+            "title": "Mantén una API pública tipada",
+            "detail": "Publica un paquete y sostenlo un año, con versiones mayores y deprecaciones ordenadas. Descubrirás que añadir un miembro a una unión exportada rompe a tus usuarios."
+          },
+          {
+            "id": "ts-m402",
+            "title": "Escala la compilación",
+            "detail": "Monta project references en un monorepo y mide el antes y el después en tiempos de build y de respuesta del editor. Decide conscientemente si los paquetes se consumen como fuente o como build."
+          },
+          {
+            "id": "ts-m403",
+            "title": "Lidera una migración",
+            "detail": "Lleva una base de JavaScript a TypeScript estricto de forma incremental, sin parar las entregas y sin una rama larga. Mide el efecto en errores de producción."
+          },
+          {
+            "id": "ts-m404",
+            "title": "Frena la degradación con un umbral",
+            "detail": "Pon type-coverage en CI con un mínimo que solo pueda subir. No exige arreglar el pasado, solo prohíbe empeorar, y por eso funciona donde fracasan las campañas de limpieza."
+          },
+          {
+            "id": "ts-m405",
+            "title": "Documenta una decisión de tipado",
+            "detail": "Un ADR sobre cuándo se acepta un `as`, cuándo se valida en runtime y cuándo un tipo es demasiado listo. Con las consecuencias negativas escritas."
+          },
+          {
+            "id": "ts-m406",
+            "title": "Defiende no usar TypeScript en algo",
+            "detail": "Encuentra un caso real en tu organización donde no compense y argumenta por qué. Saber dónde no aplicar una herramienta es parte de dominarla."
+          },
+          {
+            "id": "ts-m407",
+            "title": "Enseña el modelo mental",
+            "detail": "Da una sesión interna sobre por qué los tipos se borran y qué implica. Es el concepto que más bugs evita y el que menos gente tiene interiorizado."
+          }
+        ],
+        "resources": [
+          {
+            "title": "Architecture Decision Records",
+            "url": "https://adr.github.io/",
+            "kind": "article"
+          },
+          {
+            "title": "TypeScript project references",
+            "url": "https://www.typescriptlang.org/docs/handbook/project-references.html",
+            "kind": "docs"
+          },
+          {
+            "title": "type-coverage",
+            "url": "https://github.com/plantain-00/type-coverage",
+            "kind": "repo"
+          },
+          {
+            "title": "A Philosophy of Software Design — John Ousterhout",
+            "url": "https://web.stanford.edu/~ouster/cgi-bin/book.php",
+            "kind": "book"
+          },
+          {
+            "title": "The Staff Engineer's Path — Tanya Reilly",
+            "url": "https://www.oreilly.com/library/view/the-staff-engineers/9781098118723/",
+            "kind": "book"
+          }
+        ],
+        "readinessSignals": [
+          "Decides el nivel de rigor de cada capa según lo que cuesta equivocarse en ella.",
+          "El tipado del equipo no se degrada aunque tú no revises.",
+          "Sabes argumentar en contra de TypeScript cuando toca.",
+          "Cambias de opinión sobre un patrón cuando aparecen datos nuevos."
+        ]
+      }
+    ]
+  }
+}

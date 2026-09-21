@@ -50,6 +50,22 @@
       "questionCount": 50,
       "exerciseCount": 10,
       "file": "javascript.json"
+    },
+    {
+      "id": "typescript",
+      "name": "TypeScript",
+      "tagline": "JavaScript con tipos estáticos: modelado, inferencia, validación en la frontera y escala.",
+      "category": "Lenguaje",
+      "keywords": [
+        "typescript",
+        "ts",
+        "tipos",
+        "tipado"
+      ],
+      "seedColor": "0xFF3178C6",
+      "questionCount": 50,
+      "exerciseCount": 10,
+      "file": "typescript.json"
     }
   ]
 }
