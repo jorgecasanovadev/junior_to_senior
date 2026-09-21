@@ -118,6 +118,12 @@ final sessionPolicyProvider =
 
 /// The set of cards a session would contain right now. Recomputes whenever
 /// the schedules change, so the "por repasar" badge stays live.
+///
+/// Known limitation: `now` is captured when the provider is built and only
+/// refreshes when a dependency changes. If the app stays open across
+/// midnight, cards that came due overnight are not picked up until the next
+/// review. Fixing it properly means invalidating this on app resume and on a
+/// day boundary, which is the next thing to do here.
 final sessionPlanProvider = Provider.family<AsyncValue<SessionPlan>, String>((
   ref,
   technologyId,
