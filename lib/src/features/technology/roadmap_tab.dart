@@ -38,6 +38,7 @@ class RoadmapTab extends ConsumerWidget {
           itemCount: value.roadmap.length,
           itemBuilder: (context, index) => _StageCard(
             stage: value.roadmap[index],
+            number: index + 1,
             technologyId: technologyId,
             completed: completed,
             isLast: index == value.roadmap.length - 1,
@@ -51,12 +52,26 @@ class RoadmapTab extends ConsumerWidget {
 class _StageCard extends ConsumerWidget {
   const _StageCard({
     required this.stage,
+    required this.number,
     required this.technologyId,
     required this.completed,
     required this.isLast,
   });
 
+  /// Diameter of the timeline marker.
+  static const double dotSize = 28;
+
+  /// Pushes the marker down so its centre lines up with the first line of the
+  /// card title instead of with the card's top border. Asserted in
+  /// test/layout_test.dart so a change in the tile's padding gets caught.
+  static const double dotTopOffset = 12;
+
   final RoadmapStage stage;
+
+  /// Position in the roadmap, 1-based. Deliberately not derived from the
+  /// seniority level: several stages share a level, which made the markers
+  /// read 1, 1, 2, 3 instead of 1, 2, 3, 4.
+  final int number;
   final String technologyId;
   final Set<String> completed;
   final bool isLast;
@@ -82,9 +97,9 @@ class _StageCard extends ConsumerWidget {
       children: [
         if (!isLast)
           Positioned(
-            // 13 plus half of the 2px line centres it under the 28px dot.
+            // 13 plus half of the 2px line centres it under the dot.
             left: 13,
-            top: 28,
+            top: dotTopOffset + dotSize,
             bottom: 0,
             child: Container(width: 2, color: theme.colorScheme.outlineVariant),
           ),
@@ -92,8 +107,9 @@ class _StageCard extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Container(
-              width: 28,
-              height: 28,
+              margin: const EdgeInsets.only(top: dotTopOffset),
+              width: dotSize,
+              height: dotSize,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: progress == 1 ? accent : accent.withValues(alpha: 0.15),
@@ -103,7 +119,7 @@ class _StageCard extends ConsumerWidget {
               child: progress == 1
                   ? const Icon(Icons.check, size: 16, color: Colors.white)
                   : Text(
-                      '${stage.level.index + 1}',
+                      '$number',
                       style: TextStyle(
                         color: accent,
                         fontWeight: FontWeight.w800,
