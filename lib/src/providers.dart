@@ -189,3 +189,15 @@ final masteryProvider = Provider.family<AsyncValue<MasterySnapshot>, String>((
     );
   });
 });
+
+// ----------------------------------------------------------------- interview
+
+/// Every technology's payload at once. The interview guide cuts across the
+/// whole bank, and the bank is small enough (a few hundred KB) to hold.
+final allContentProvider = FutureProvider<List<TechnologyContent>>((ref) async {
+  final repository = ref.watch(contentRepositoryProvider);
+  final technologies = await repository.technologies();
+  return Future.wait([
+    for (final technology in technologies) repository.load(technology.id),
+  ]);
+});

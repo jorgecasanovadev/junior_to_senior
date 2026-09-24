@@ -76,7 +76,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         color: theme.colorScheme.onSurfaceVariant,
                       ),
                     ),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 16),
+                    const _InterviewEntry(),
+                    const SizedBox(height: 16),
                     TextField(
                       controller: _controller,
                       autofocus: false,
@@ -237,6 +239,61 @@ class _TechnologyCard extends ConsumerWidget {
                 ),
               ),
               const Icon(Icons.chevron_right),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Entry to the posting-driven guide. A card rather than a header icon
+/// because it is a primary use, not a setting.
+class _InterviewEntry extends StatelessWidget {
+  const _InterviewEntry();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Card(
+      color: theme.colorScheme.primaryContainer,
+      margin: EdgeInsets.zero,
+      child: InkWell(
+        onTap: () => context.push('/interview'),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Icon(
+                Icons.work_outline,
+                color: theme.colorScheme.onPrimaryContainer,
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Preparar una entrevista',
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: theme.colorScheme.onPrimaryContainer,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Pega la oferta y arma una guía con el stack que piden.',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onPrimaryContainer,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.chevron_right,
+                color: theme.colorScheme.onPrimaryContainer,
+              ),
             ],
           ),
         ),

@@ -14,6 +14,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:junior_to_senior/src/data/content_repository.dart';
 import 'package:junior_to_senior/src/data/database.dart';
+import 'package:junior_to_senior/src/features/interview/interview_screen.dart';
 import 'package:junior_to_senior/src/features/technology/exercises_tab.dart';
 import 'package:junior_to_senior/src/features/technology/questions_tab.dart';
 import 'package:junior_to_senior/src/features/technology/roadmap_tab.dart';
@@ -202,6 +203,18 @@ void main() {
           );
         });
       }
+
+      testWidgets('la guía de entrevista no desborda', (tester) async {
+        await pumpAt(
+          tester,
+          entry.value,
+          const InterviewScreen(
+            initialPosting:
+                'Desarrollador Móvil Senior – Flutter/Dart. BLoC, Clean '
+                'Architecture, APIs REST, OWASP, CI/CD, biometría, push.',
+          ),
+        );
+      });
 
       testWidgets('la pantalla de tecnología completa no desborda', (
         tester,
