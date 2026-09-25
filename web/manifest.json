@@ -1,6 +1,6 @@
 {
-    "name": "junior_to_senior",
-    "short_name": "junior_to_senior",
+    "name": "JuniorToSenior",
+    "short_name": "JuniorToSenior",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0A1A33",

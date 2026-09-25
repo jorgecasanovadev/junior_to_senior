@@ -13,7 +13,7 @@ class JuniorToSeniorApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp.router(
-      title: 'junior → senior',
+      title: 'JuniorToSenior',
       debugShowCheckedModeBanner: false,
       routerConfig: appRouter,
       theme: buildTheme(seed: _seed, brightness: Brightness.light),
