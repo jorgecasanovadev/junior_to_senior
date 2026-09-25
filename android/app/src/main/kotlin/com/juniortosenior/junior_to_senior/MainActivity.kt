@@ -1,5 +1,7 @@
 package com.juniortosenior.junior_to_senior
 
-import io.flutter.embedding.android.FlutterActivity
+import com.ryanheise.audioservice.AudioServiceActivity
 
-class MainActivity : FlutterActivity()
+// audio_service shares one FlutterEngine between the UI and the background
+// playback service; its activity base class is what wires that up.
+class MainActivity : AudioServiceActivity()

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/theme.dart';
 import '../../providers.dart';
+import '../listen/listen_screen.dart';
 import '../widgets/common.dart';
 import 'exercises_tab.dart';
 import 'questions_tab.dart';
@@ -64,6 +65,23 @@ class _Loaded extends ConsumerWidget {
               pinned: true,
               title: Text(name),
               actions: [
+                IconButton(
+                  tooltip: 'Escuchar preguntas de $name',
+                  icon: const Icon(Icons.headphones),
+                  onPressed: () {
+                    final content = ref
+                        .read(technologyContentProvider(technologyId))
+                        .value;
+                    if (content == null) return;
+                    context.push(
+                      '/listen',
+                      extra: ListenRequest(
+                        title: name,
+                        questions: content.questions,
+                      ),
+                    );
+                  },
+                ),
                 IconButton(
                   tooltip: 'Reiniciar progreso de $name',
                   icon: const Icon(Icons.restart_alt),

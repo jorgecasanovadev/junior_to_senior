@@ -14,12 +14,20 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:junior_to_senior/src/data/content_repository.dart';
 import 'package:junior_to_senior/src/data/database.dart';
+import 'package:junior_to_senior/src/audio/study_audio_handler.dart';
+import 'package:junior_to_senior/src/domain/models.dart';
+import 'package:junior_to_senior/src/domain/voice_settings.dart';
 import 'package:junior_to_senior/src/features/interview/interview_screen.dart';
+import 'package:junior_to_senior/src/features/listen/listen_screen.dart';
+import 'package:junior_to_senior/src/features/settings/settings_screen.dart';
 import 'package:junior_to_senior/src/features/technology/exercises_tab.dart';
 import 'package:junior_to_senior/src/features/technology/questions_tab.dart';
 import 'package:junior_to_senior/src/features/technology/roadmap_tab.dart';
 import 'package:junior_to_senior/src/features/technology/technology_screen.dart';
 import 'package:junior_to_senior/src/providers.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import 'support/fake_speech_engine.dart';
 
 class DiskAssetBundle extends CachingAssetBundle {
   @override
@@ -50,13 +58,24 @@ Future<void> pumpAt(
 
   /// Runs while the tree is still mounted, for tests that inspect geometry.
   Future<void> Function(WidgetTester tester)? inspect,
+
+  /// Prepares the audio player before mounting, e.g. to show it mid-session.
+  Future<void> Function(StudyAudioHandler handler, ContentRepository content)?
+  audio,
 }) async {
   final db = AppDatabase.forTesting(NativeDatabase.memory());
   final content = ContentRepository(bundle: DiskAssetBundle());
+  // Held, so a session started by [audio] stays "playing" while drawn.
+  final engine = FakeSpeechEngine()..hold = true;
+  final handler = StudyAudioHandler(engine, () => const VoiceSettings());
+  SharedPreferences.setMockInitialValues({});
+  late final SharedPreferences prefs;
   await tester.runAsync(() async {
     for (final technology in await content.technologies()) {
       await content.load(technology.id);
     }
+    prefs = await SharedPreferences.getInstance();
+    if (audio != null) await audio(handler, content);
   });
 
   tester.view
@@ -69,6 +88,9 @@ Future<void> pumpAt(
       overrides: [
         appDatabaseProvider.overrideWithValue(db),
         contentRepositoryProvider.overrideWithValue(content),
+        sharedPreferencesProvider.overrideWithValue(prefs),
+        speechEngineProvider.overrideWithValue(engine),
+        audioHandlerProvider.overrideWithValue(handler),
       ],
       child: MaterialApp(home: Scaffold(body: child)),
     ),
@@ -213,6 +235,38 @@ void main() {
                 'Desarrollador Móvil Senior – Flutter/Dart. BLoC, Clean '
                 'Architecture, APIs REST, OWASP, CI/CD, biometría, push.',
           ),
+        );
+      });
+
+      testWidgets('los ajustes no desbordan', (tester) async {
+        await pumpAt(tester, entry.value, const SettingsScreen());
+      });
+
+      testWidgets('escuchar, antes de empezar, no desborda', (tester) async {
+        await pumpAt(
+          tester,
+          entry.value,
+          const ListenScreen(
+            request: ListenRequest(title: 'Flutter', questions: []),
+          ),
+        );
+      });
+
+      testWidgets('escuchar, a mitad de sesión, no desborda', (tester) async {
+        late List<Question> questions;
+        await pumpAt(
+          tester,
+          entry.value,
+          Builder(
+            builder: (_) => ListenScreen(
+              request: ListenRequest(title: 'Flutter', questions: questions),
+            ),
+          ),
+          audio: (handler, content) async {
+            questions = (await content.load('flutter')).questions;
+            await handler.load(title: 'Flutter', questions: questions);
+            await handler.play();
+          },
         );
       });
 

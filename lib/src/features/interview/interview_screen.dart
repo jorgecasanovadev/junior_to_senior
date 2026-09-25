@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../domain/interview_planner.dart';
 import '../../domain/models.dart';
 import '../../providers.dart';
+import '../listen/listen_screen.dart';
 import '../technology/questions_tab.dart';
 import '../widgets/common.dart';
 
@@ -80,6 +82,20 @@ class _InterviewScreenState extends ConsumerState<InterviewScreen> {
       appBar: AppBar(
         title: const Text('Preparar entrevista'),
         actions: [
+          if (plan != null && plan.questionCount > 0)
+            IconButton(
+              tooltip: 'Escuchar la guía',
+              icon: const Icon(Icons.headphones),
+              onPressed: () => context.push(
+                '/listen',
+                extra: ListenRequest(
+                  title: 'Guía de entrevista',
+                  questions: [
+                    for (final section in plan.sections) ...section.questions,
+                  ],
+                ),
+              ),
+            ),
           if (plan != null && !plan.isEmpty)
             IconButton(
               tooltip: 'Copiar como Markdown',

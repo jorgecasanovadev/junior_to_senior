@@ -4,12 +4,18 @@ library;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:shared_preferences/shared_preferences.dart';
+
+import 'audio/speech_engine.dart';
+import 'audio/study_audio_handler.dart';
 import 'data/content_repository.dart';
 import 'data/database.dart';
 import 'data/progress_repository.dart';
+import 'data/settings_repository.dart';
 import 'domain/models.dart';
 import 'domain/session_planner.dart';
 import 'domain/srs.dart';
+import 'domain/voice_settings.dart';
 
 // ------------------------------------------------------------ infrastructure
 
@@ -201,3 +207,43 @@ final allContentProvider = FutureProvider<List<TechnologyContent>>((ref) async {
     for (final technology in technologies) repository.load(technology.id),
   ]);
 });
+
+// --------------------------------------------------------------------- audio
+
+/// Loaded before `runApp` and injected, so settings are available
+/// synchronously on the first frame.
+final sharedPreferencesProvider = Provider<SharedPreferences>(
+  (ref) => throw UnimplementedError('Override in main() or in the test.'),
+);
+
+final settingsRepositoryProvider = Provider<SettingsRepository>(
+  (ref) => SettingsRepository(ref.watch(sharedPreferencesProvider)),
+);
+
+final speechEngineProvider = Provider<SpeechEngine>(
+  (ref) => FlutterTtsEngine(),
+);
+
+/// Created by audio_service in main(), which owns its lifetime.
+final audioHandlerProvider = Provider<StudyAudioHandler>(
+  (ref) => throw UnimplementedError('Override in main() or in the test.'),
+);
+
+class VoiceSettingsNotifier extends Notifier<VoiceSettings> {
+  @override
+  VoiceSettings build() => ref.watch(settingsRepositoryProvider).voice();
+
+  Future<void> update(VoiceSettings settings) async {
+    state = settings;
+    await ref.read(settingsRepositoryProvider).saveVoice(settings);
+  }
+}
+
+final voiceSettingsProvider =
+    NotifierProvider<VoiceSettingsNotifier, VoiceSettings>(
+      VoiceSettingsNotifier.new,
+    );
+
+final spanishVoicesProvider = FutureProvider<List<VoiceOption>>(
+  (ref) => ref.watch(speechEngineProvider).spanishVoices(),
+);

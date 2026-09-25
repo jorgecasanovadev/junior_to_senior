@@ -61,9 +61,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           icon: const Icon(Icons.insights_outlined),
                         ),
                         IconButton(
-                          tooltip: 'Acerca de',
-                          onPressed: () => context.push('/about'),
-                          icon: const Icon(Icons.info_outline),
+                          tooltip: 'Ajustes',
+                          onPressed: () => context.push('/settings'),
+                          icon: const Icon(Icons.settings_outlined),
                         ),
                       ],
                     ),
