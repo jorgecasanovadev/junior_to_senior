@@ -53,3 +53,7 @@ app.*.map.json
 
 # Borradores de contenido en curso; solo se versiona el validador
 /scratchpad/content/*.json
+
+# Guías personales: se empaquetan en tu build, nunca en el repo público.
+assets/private/*
+!assets/private/README.md
