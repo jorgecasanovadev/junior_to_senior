@@ -1,8 +1,18 @@
 # Contenido privado
 
-Todo lo que hay en esta carpeta, salvo este README, está en `.gitignore`: es
-material personal (por ejemplo, la guía de una entrevista concreta) que se
-empaqueta en tu build pero nunca llega al repo público.
+Esta carpeta está vacía a propósito: un `flutter build` normal genera la app
+pública, sin guías personales.
+
+Las guías personales (por ejemplo, la de una entrevista concreta) van en
+`/private` en la raíz del repo, que está en `.gitignore`. Para compilar o
+ejecutar con ellas:
+
+```bash
+tool/personal.sh run
+tool/personal.sh build apk --release
+```
+
+El script las copia aquí solo mientras dura el comando y las borra al terminar.
 
 Mismo formato que `assets/content/`: un `index.json` con la lista y un fichero
 por guía. Si no hay `index.json`, la app funciona igual, solo sin guías

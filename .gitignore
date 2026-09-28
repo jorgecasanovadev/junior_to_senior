@@ -54,6 +54,13 @@ app.*.map.json
 # Borradores de contenido en curso; solo se versiona el validador
 /scratchpad/content/*.json
 
-# Guías personales: se empaquetan en tu build, nunca en el repo público.
+# Guías personales: viven en /private y solo tool/personal.sh las copia a
+# assets/private/ mientras dura el build. Nunca en el repo público.
+/private/
 assets/private/*
 !assets/private/README.md
+
+# Contexto personal y de herramientas de IA (vive en personal_context/)
+CLAUDE.md
+CLAUDE.local.md
+.claude/
