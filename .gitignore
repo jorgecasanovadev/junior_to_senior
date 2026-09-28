@@ -60,7 +60,7 @@ app.*.map.json
 assets/private/*
 !assets/private/README.md
 
-# Contexto personal y de herramientas de IA (vive en personal_context/)
+# Contexto personal y de herramientas de IA (vive fuera del repo)
 CLAUDE.md
 CLAUDE.local.md
 .claude/
